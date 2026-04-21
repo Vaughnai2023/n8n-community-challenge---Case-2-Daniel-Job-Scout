@@ -1,0 +1,39 @@
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Local Claude / agent state ===
+.claude/
+n8n-builder-data/
+
+# === Cases not in this submission ===
+Case 1_ Aisha — Package evaluator/
+Case 3_ Marco — Local Lead Enrichment/
+
+# === Local dev artifacts ===
+build/*.bak
+build/*.bak2
+build/ids.md
+
+# === Sensitive (defense-in-depth — none currently committed) ===
+.env
+.env.*
+*.pem
+*.key
+*.cert
+*.p12
+*credential*
+*secret*
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# === Logs / temp ===
+*.log
+tmp/
+.cache/

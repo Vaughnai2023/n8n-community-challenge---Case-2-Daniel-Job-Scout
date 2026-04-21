@@ -1,0 +1,91 @@
+{
+  "name": "M2 Firecrawl - Case 2: Daniel - Job Scout (Starter)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [740, 300]
+    },
+    {
+      "parameters": {
+        "resource": "search",
+        "query": "={{ $json.query }}",
+        "options": {}
+      },
+      "id": "firecrawl-search",
+      "name": "Firecrawl Search",
+      "type": "n8n-nodes-base.firecrawl",
+      "typeVersion": 1,
+      "position": [740, 520]
+    },
+    {
+      "parameters": {
+        "content": "## Case 2: Daniel - Job Scout\n\n**Difficulty:** Intermediate\n\n**Trigger:** Weekly schedule (Mondays at 8:00 AM)\n\n**Daniel's criteria:**\n- Senior Backend Engineer\n- Stack: Python, Django, PostgreSQL, Redis, AWS\n- 8 years experience\n- Remote (EU-friendly timezones)\n- Min salary: EUR 90,000\n- Max listing age: 7 days\n- Deal-breakers: on-site only, US citizenship, crypto/web3\n\n**Your task:**\n1. Use the AI Agent to search for matching roles\n2. Use Firecrawl to scrape job boards and company pages\n3. Enrich with company context\n4. Deliver a weekly briefing",
+        "height": 460,
+        "width": 360,
+        "color": 5
+      },
+      "id": "sticky-overview",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [40, 160]
+    },
+    {
+      "parameters": {
+        "content": "## Build your agent here\n\nConnect the AI Agent after the Schedule Trigger.\n\nThe agent should:\n- Search job boards for relevant roles\n- Filter by stack, location, salary, and deal-breakers\n- Enrich each role with company context\n- Produce a weekly briefing with ranked matches\n- Mark unavailable data explicitly\n\nAdd Firecrawl as a tool to the AI Agent node.",
+        "height": 240,
+        "width": 420,
+        "color": 3
+      },
+      "id": "sticky-build",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [460, 520]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "versionId": "1"
+}

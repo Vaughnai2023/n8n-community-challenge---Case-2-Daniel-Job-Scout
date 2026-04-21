@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{NAME}} — {{SUBTITLE}}</title>
+
+<!--
+  USAGE — slot spec for the n8n CV Tailor LLM Chain
+  =================================================
+  {{NAME}}              Plain text. e.g., "Daniel Chen"
+  {{SUBTITLE}}          Plain text, role-tuned. e.g., "Senior Backend Engineer — Distributed Systems"
+  {{SUMMARY}}           Plain text, 2-3 sentences, profile paragraph.
+  {{CONTACT_EMAIL}}     Plain text email.
+  {{CONTACT_LOCATION}}  Plain text. e.g., "Remote · Lisbon, CET"
+  {{CONTACT_GITHUB}}    Plain text handle (no "github.com/"). e.g., "danielchen-dev"
+  {{CONTACT_LINKEDIN}}  Plain text handle. e.g., "danielchen-backend"
+  {{SKILLS_HTML}}       One or more <li>Skill</li> items, flat list.
+  {{EDUCATION_HTML}}    One or more <li><strong>Qual</strong><br><span>Meta</span></li> items.
+  {{EXPERIENCE_HTML}}   One or more <div class="role"> blocks. Example:
+                          <div class="role">
+                            <div class="role-head">
+                              <strong>Fintrace</strong>
+                              <span class="role-meta">Staff Backend Engineer · 2023–2026</span>
+                            </div>
+                            <ul>
+                              <li>Led re-architecture of transaction-ledger service from Django monolith…</li>
+                              <li>Owned PostgreSQL migration from primary to primary+3 read-replicas…</li>
+                            </ul>
+                          </div>
+  {{PORTFOLIO_HTML}}    One or more <div class="project"> blocks. Example:
+                          <div class="project">
+                            <strong>django-async-queue</strong>
+                            <p>Open-source library for first-class async Celery-style workers. 1.8k stars.</p>
+                          </div>
+  {{COMPANY_NAME}}      Plain text company name, used inline in "Why {{COMPANY_NAME}}" heading.
+  {{WHY_COMPANY}}       Plain text, 1 paragraph, ~60 words. References product/mission + JD + timezone fit.
+-->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --ink: #0e1216;
+    --ink-soft: #3a4048;
+    --ink-mute: #6b7280;
+    --accent: #1f3b5b;      /* muted deep blue, WCAG AA on white */
+    --rule: #e5e7eb;
+    --rail-bg: #f7f7f5;
+    --page-w: 210mm;
+    --page-h: 297mm;
+  }
+
+  @page { size: A4; margin: 0; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: #eee;
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 10.25pt;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    width: var(--page-w);
+    min-height: var(--page-h);
+    margin: 16px auto;
+    background: #fff;
+    display: grid;
+    grid-template-columns: 62mm 1fr;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  /* LEFT RAIL */
+  .rail {
+    background: var(--rail-bg);
+    padding: 14mm 10mm 14mm 12mm;
+    border-right: 1px solid var(--rule);
+  }
+  .rail h2 {
+    font-size: 8.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0 0 6px 0;
+  }
+  .rail section + section { margin-top: 14px; }
+  .rail ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .rail li {
+    padding: 3px 0;
+    font-size: 9.5pt;
+    color: var(--ink-soft);
+    line-height: 1.35;
+  }
+  .rail .contact li {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8.75pt;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    word-break: break-word;
+  }
+  .rail .contact li span.label {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: 7.5pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 1px;
+    font-weight: 500;
+  }
+
+  /* MAIN COLUMN */
+  .main {
+    padding: 14mm 13mm 14mm 13mm;
+  }
+  .header {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .header .name {
+    font-size: 26pt;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    color: var(--ink);
+  }
+  .header .subtitle {
+    margin-top: 4px;
+    font-size: 9pt;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .main h2 {
+    font-size: 9pt;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 14px 0 6px 0;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .summary {
+    font-size: 10.5pt;
+    color: var(--ink-soft);
+    margin: 0 0 4px 0;
+  }
+
+  /* Experience */
+  .role { margin: 8px 0 10px 0; page-break-inside: avoid; }
+  .role-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 3px;
+  }
+  .role-head strong {
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .role-meta {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8.5pt;
+    color: var(--ink-mute);
+    white-space: nowrap;
+  }
+  .role ul {
+    margin: 3px 0 0 0;
+    padding: 0 0 0 16px;
+  }
+  .role li {
+    margin: 2px 0;
+    font-size: 9.75pt;
+    color: var(--ink-soft);
+    line-height: 1.42;
+  }
+
+  /* Portfolio */
+  .portfolio {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 14px;
+  }
+  .project {
+    page-break-inside: avoid;
+  }
+  .project strong {
+    font-size: 10pt;
+    font-weight: 600;
+    color: var(--ink);
+    display: block;
+    margin-bottom: 1px;
+  }
+  .project p {
+    margin: 0;
+    font-size: 9.5pt;
+    color: var(--ink-soft);
+    line-height: 1.38;
+  }
+
+  /* Why company */
+  .why {
+    background: var(--rail-bg);
+    border-left: 2px solid var(--accent);
+    padding: 9px 12px;
+    margin-top: 8px;
+    font-size: 10pt;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  .why h2 {
+    border: 0;
+    padding: 0;
+    margin: 0 0 4px 0;
+  }
+  .why p { margin: 0; }
+
+  /* Print */
+  @media print {
+    body { background: #fff; }
+    .page {
+      margin: 0;
+      box-shadow: none;
+      width: 100%;
+      min-height: auto;
+    }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <aside class="rail">
+    <section class="contact">
+      <h2>Contact</h2>
+      <ul>
+        <li><span class="label">Email</span>{{CONTACT_EMAIL}}</li>
+        <li><span class="label">Location</span>{{CONTACT_LOCATION}}</li>
+        <li><span class="label">GitHub</span>github.com/{{CONTACT_GITHUB}}</li>
+        <li><span class="label">LinkedIn</span>linkedin.com/in/{{CONTACT_LINKEDIN}}</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Core Stack</h2>
+      <ul>
+        {{SKILLS_HTML}}
+      </ul>
+    </section>
+
+    <section>
+      <h2>Education</h2>
+      <ul>
+        {{EDUCATION_HTML}}
+      </ul>
+    </section>
+  </aside>
+
+  <main class="main">
+    <div class="header">
+      <div class="name">{{NAME}}</div>
+      <div class="subtitle">{{SUBTITLE}}</div>
+    </div>
+
+    <h2>Profile</h2>
+    <p class="summary">{{SUMMARY}}</p>
+
+    <h2>Experience</h2>
+    {{EXPERIENCE_HTML}}
+
+    <h2>Selected Work</h2>
+    <div class="portfolio">
+      {{PORTFOLIO_HTML}}
+    </div>
+
+    <div class="why">
+      <h2>Why {{COMPANY_NAME}}</h2>
+      <p>{{WHY_COMPANY}}</p>
+    </div>
+  </main>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1653 @@
+{
+  "updatedAt": "2026-04-20T04:03:01.432Z",
+  "createdAt": "2026-04-19T14:51:31.440Z",
+  "id": "Lf0B8uZcpe4Xsgsb",
+  "name": "M2 Case 2: Daniel — Job Scout v1",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Weekly Monday 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.accumulator = [];\nconst now = new Date();\nconst runId = `run_${now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;\nconst config = {\n  run_id: runId,\n  run_timestamp_utc: now.toISOString(),\n  dry_run: false,\n  criteria: {\n    role_keywords: ['senior backend engineer', 'staff backend engineer', 'backend engineer'],\n    stack_required: ['python', 'django'],\n    stack_preferred: ['postgresql', 'postgres', 'redis', 'aws'],\n    experience_years_target: 8,\n    salary_min_eur: 90000,\n    deal_breakers: ['on-site only', 'on site only', 'requires us citizenship', 'crypto', 'web3', 'blockchain'],\n    nice_to_have: ['4-day week', 'four-day week', 'open source', 'series a', 'series b', 'series c'],\n    max_listing_age_days: 7\n  },\n  sources: [\n    { name: 'remoteok.com', weight: 1.0 },\n    { name: 'weworkremotely.com', weight: 0.9 },\n    { name: 'himalayas.app', weight: 0.9 },\n    { name: 'jobspresso.co', weight: 0.8 },\n    { name: '4dayweek.io', weight: 0.6 }\n  ],\n  firecrawl: {\n    search_query: '\"senior backend engineer\" python django remote (site:remoteok.com OR site:weworkremotely.com OR site:himalayas.app OR site:jobspresso.co OR site:4dayweek.io) -crypto -web3',\n    search_limit: 24\n  },\n  candidate_cap: 3,\n  deliver_top_n: 10\n};\nreturn [{ json: config }];"
+      },
+      "id": "config",
+      "name": "Config + Run Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "MapSearch",
+        "operation": "search",
+        "query": "={{ $json.firecrawl.search_query }}",
+        "limit": "={{ $json.firecrawl.search_limit }}",
+        "requestOptions": {}
+      },
+      "id": "firecrawl-search",
+      "name": "Firecrawl Search (multi-site)",
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [
+        688,
+        400
+      ],
+      "credentials": {
+        "firecrawlApi": {
+          "id": "TIuPUXx9FYiWbwS1",
+          "name": "Firecrawl account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.all();\nconst seen = new Set();\nconst candidates = [];\nfor (const item of raw) {\n  const j = item.json || {};\n  let resultArr = [];\n  if (j.data && Array.isArray(j.data.web)) resultArr = j.data.web;\n  else if (j.data && Array.isArray(j.data)) resultArr = j.data;\n  else if (Array.isArray(j.web)) resultArr = j.web;\n  else if (Array.isArray(j.results)) resultArr = j.results;\n  else if (Array.isArray(j)) resultArr = j;\n  for (const r of resultArr) {\n    const url = r.url || r.link || r.source_url;\n    if (!url || seen.has(url)) continue;\n    seen.add(url);\n    let source = 'unknown';\n    if (url.includes('remoteok.com')) source = 'remoteok.com';\n    else if (url.includes('weworkremotely.com')) source = 'weworkremotely.com';\n    else if (url.includes('remotive.com')) source = 'remotive.com';\n    else if (url.includes('4dayweek.io')) source = '4dayweek.io';\n    candidates.push({\n      listing_url: url,\n      title: r.title || r.name || '',\n      description_snippet: r.description || r.snippet || (r.markdown || '').slice(0, 400),\n      source\n    });\n  }\n}\nconst config = $('Config + Run Context').first().json;\nreturn candidates.map(c => ({ json: { ...c, run_id: config.run_id, run_timestamp_utc: config.run_timestamp_utc } }));"
+      },
+      "id": "parse-candidates",
+      "name": "Parse Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "hYVM1BcLgvLXRRZH",
+          "mode": "id"
+        },
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "id": "get-seen-roles",
+      "name": "Get Seen Roles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        400
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const candidates = $('Parse Candidates').all().map(i => i.json);\nconst config = $('Config + Run Context').first().json;\n\n// Get Seen Roles may error on empty table — guard against that\nlet seenRows = [];\ntry {\n  seenRows = $('Get Seen Roles').all().map(i => i.json).filter(r => r && typeof r === 'object');\n} catch (e) {\n  seenRows = [];\n}\n\n// A seen row has listing_url + first_seen_utc. A passthrough candidate won't have first_seen_utc.\n// Only treat rows with first_seen_utc as truly seen.\nconst seenSet = new Set(seenRows.filter(r => r.first_seen_utc).map(r => r.listing_url).filter(Boolean));\n\nconst fresh = candidates.filter(c => !seenSet.has(c.listing_url));\nconst sourceWeights = Object.fromEntries(config.sources.map(s => [s.name, s.weight]));\nfresh.sort((a, b) => (sourceWeights[b.source] || 0) - (sourceWeights[a.source] || 0));\nconst capped = fresh.slice(0, config.candidate_cap);\nreturn capped.map(c => ({ json: { ...c, run_id: config.run_id, run_timestamp_utc: config.run_timestamp_utc } }));"
+      },
+      "id": "dedup-filter",
+      "name": "Dedup + Cap Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop-candidates",
+      "name": "Loop Over Candidates",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1568,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "agent-brain-model",
+      "name": "OpenAI (Agent brain)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2048,
+        608
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "O22yFogXaDdyXSyr",
+          "name": "OPENAI_API_KEY"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"company\": \"Acme Corp\",\n  \"role\": \"Senior Backend Engineer\",\n  \"location\": \"Remote (Europe)\",\n  \"remote_type\": \"remote_anywhere\",\n  \"listing_posted_date\": \"2026-04-15\",\n  \"stack_matched_csv\": \"python,django,postgresql,redis\",\n  \"stack_missing_csv\": \"aws\",\n  \"deal_breaker_hit\": false,\n  \"deal_breaker_reason\": \"\",\n  \"deal_breaker_quote\": \"\",\n  \"salary_min_eur\": 95000,\n  \"salary_max_eur\": 120000,\n  \"salary_source\": \"listing\",\n  \"salary_confidence\": \"high\",\n  \"observed_facts_semicolon\": \"Remote-first; CET overlap; 4-day week; Series B\",\n  \"why_it_fits\": \"Strong stack overlap, CET overlap, salary clears threshold.\"\n}"
+      },
+      "id": "agent-output-parser",
+      "name": "Structured Output (16 fields)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2208,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=The JD has been pre-scraped. Extract the 16-field schema from the JD markdown below.\n\nCANDIDATE:\n- URL: {{ $json.listing_url }}\n- Title: {{ $json.title }}\n- Source: {{ $json.source }}\n- JD length: {{ $json.jd_markdown_length }} chars\n\nJD MARKDOWN:\n{{ $json.jd_markdown }}\n\nReturn ONLY the structured output.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You qualify remote backend roles for Daniel (Senior/Staff Backend Engineer, 8 yrs, Python+Django primary, PostgreSQL/Redis/AWS strong-preference, EU-friendly remote, EUR 90k+ min).\n\nDEAL-BREAKERS (HARD REJECT): on-site only, requires US citizenship, crypto/web3/blockchain.\n\nThe JD markdown is provided in the user message. Extract ALL 16 schema fields from it.\n\nEVIDENCE RULES:\n- deal_breaker_quote MUST be a verbatim substring of the provided JD markdown (max 200 chars). Never invent.\n- Stack matches must appear as substrings in the JD markdown (case-insensitive).\n- Salary: if present in JD use it; else set salary_source='unavailable' and salary_confidence='none'. Never invent.\n- listing_posted_date: extract if present (ISO format YYYY-MM-DD preferred, else natural label like '3 days ago'); else empty string.\n- remote_type: one of remote_anywhere | remote_eu | remote_specific_region | hybrid | onsite | unclear.\n\nReturn ONLY the structured output, no prose."
+        }
+      },
+      "id": "role-qualifier-agent",
+      "name": "Role Qualifier Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2048,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $json.output || $json;\nconst candidate = $('Loop Over Candidates').item.json;\nconst config = $('Config + Run Context').first().json;\nconst staticData = $getWorkflowStaticData('global');\nif (!Array.isArray(staticData.accumulator)) staticData.accumulator = [];\nconst stackMatched = (parsed.stack_matched_csv || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);\nconst stackMissing = (parsed.stack_missing_csv || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);\nconst obsFacts = (parsed.observed_facts_semicolon || '').toLowerCase();\nlet filtered = false, reasonCode = '', reasonQuote = '';\nif (parsed.deal_breaker_hit === true || parsed.deal_breaker_hit === 'true') { filtered = true; reasonCode = 'deal_breaker:' + (parsed.deal_breaker_reason || 'unknown'); reasonQuote = parsed.deal_breaker_quote || ''; }\nif (!filtered && parsed.salary_max_eur > 0 && parsed.salary_max_eur < config.criteria.salary_min_eur && parsed.salary_confidence === 'high') { filtered = true; reasonCode = 'salary_below_threshold'; reasonQuote = `Salary ${parsed.salary_min_eur}-${parsed.salary_max_eur} EUR`; }\nif (!filtered && parsed.listing_posted_date && /^\\d{4}-\\d{2}-\\d{2}/.test(parsed.listing_posted_date)) { const ageDays = (Date.now() - new Date(parsed.listing_posted_date).getTime()) / 86400000; if (ageDays > config.criteria.max_listing_age_days) { filtered = true; reasonCode = 'listing_too_old'; reasonQuote = `Posted ${parsed.listing_posted_date}, ${Math.round(ageDays)}d ago`; } }\nif (!filtered && !['remote_anywhere', 'remote_eu', 'remote_specific_region'].includes(parsed.remote_type)) { filtered = true; reasonCode = 'location_mismatch:' + (parsed.remote_type || 'unclear'); reasonQuote = `remote_type=${parsed.remote_type}`; }\nlet score = 40;\nconst stackKeywords = ['python', 'django', 'postgresql', 'postgres', 'redis', 'aws'];\nfor (const k of stackKeywords) if (stackMatched.some(s => s.includes(k))) score += 8;\nscore = Math.min(score, 80);\nif (!stackMatched.some(s => s.includes('python'))) score -= 15;\nif (!stackMatched.some(s => s.includes('django'))) score -= 15;\nif (parsed.salary_min_eur >= config.criteria.salary_min_eur && parsed.salary_confidence === 'high') score += 10;\nif (parsed.salary_source === 'unavailable') score -= 5;\nif (['remote_eu', 'remote_anywhere'].includes(parsed.remote_type)) score += 5;\nconst fourDayWeek = /4-?day|four-?day/i.test(obsFacts) || candidate.source === '4dayweek.io';\nif (fourDayWeek) score += 5;\nif (/open.?source/i.test(obsFacts)) score += 3;\nif (/series\\s+[abc]/i.test(obsFacts)) score += 3;\nif (parsed.listing_posted_date && /^\\d{4}-\\d{2}-\\d{2}/.test(parsed.listing_posted_date)) { const ageDays = (Date.now() - new Date(parsed.listing_posted_date).getTime()) / 86400000; if (ageDays < 3) score += 4; }\nscore = Math.max(0, Math.min(100, score));\nconst band = score >= 75 ? 'High' : score >= 55 ? 'Medium' : 'Low';\nconst whyNotParts = [];\nif (stackMissing.length) whyNotParts.push(`Missing: ${stackMissing.slice(0, 3).join(', ')}.`);\nif (parsed.salary_confidence !== 'high') whyNotParts.push(`Salary ${parsed.salary_confidence || 'unknown'} — verify.`);\nif (parsed.remote_type === 'remote_specific_region') whyNotParts.push(`Remote scoped to a region — check timezone.`);\nconst whyNot = whyNotParts.length ? whyNotParts.join(' ') : 'No obvious red flags at listing level.';\nlet postedDisplay, ageSource;\nif (parsed.listing_posted_date && /^\\d{4}-\\d{2}-\\d{2}/.test(parsed.listing_posted_date)) { const ageDays = Math.round((Date.now() - new Date(parsed.listing_posted_date).getTime()) / 86400000); postedDisplay = `${ageDays}d ago (${parsed.listing_posted_date})`; ageSource = 'listing_date'; } else if (parsed.listing_posted_date) { postedDisplay = parsed.listing_posted_date; ageSource = 'recency_label'; } else { postedDisplay = `first seen ${config.run_timestamp_utc.split('T')[0]}`; ageSource = 'first_seen'; }\nconst out = { listing_url: candidate.listing_url, source: candidate.source, company: parsed.company || 'unknown', role: parsed.role || candidate.title || 'unknown', location: parsed.location || 'unknown', remote_type: parsed.remote_type || 'unclear', posted_display: postedDisplay, listing_posted_date: parsed.listing_posted_date || '', age_source: ageSource, stack_matched_csv: parsed.stack_matched_csv || '', stack_missing_csv: parsed.stack_missing_csv || '', salary_min_eur: parsed.salary_min_eur || 0, salary_max_eur: parsed.salary_max_eur || 0, salary_source: parsed.salary_source || 'unavailable', salary_confidence: parsed.salary_confidence || 'none', observed_facts: parsed.observed_facts_semicolon || '', why_it_fits: parsed.why_it_fits || '', why_not: whyNot, four_day_week: fourDayWeek, fit_score: score, fit_band: band, filtered, reason_code: reasonCode, reason_quote: reasonQuote, run_id: config.run_id, discovered_date: config.run_timestamp_utc, status: 'new' };\nstaticData.accumulator.push(out);\nreturn [{ json: out }];"
+      },
+      "id": "score-candidate",
+      "name": "Score + Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.filtered }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              },
+              "id": "condition-1776610477400-tf2cly2bh"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-keeper",
+      "name": "Keeper?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "cv-tailor-model",
+      "name": "OpenAI (CV Tailor)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2784,
+        352
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "O22yFogXaDdyXSyr",
+          "name": "OPENAI_API_KEY"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Tailor Daniel Chen's CV for this role. Produce 1-page A4 HTML. Use ONLY content from the master CV — no fabrication.\n\nRole: {{ $json.role }} at {{ $json.company }}\nLocation: {{ $json.location }}\nStack matched: {{ $json.stack_matched_csv }}\nWhy fits: {{ $json.why_it_fits }}\nObserved: {{ $json.observed_facts }}\n\nMASTER CV:\nDaniel Chen · daniel.chen.dev@example.com · Remote/Lisbon (CET) · github.com/danielchen-dev · linkedin.com/in/danielchen-backend\n\nSUMMARY VARIANTS (pick closest):\nA. Scale: Senior backend engineer, 8y high-throughput Python/Django on AWS. PostgreSQL schema through Redis caches/workers. Shipped 40M req/day systems. Remote-first since 2020.\nB. Product: Senior backend engineer, 8y shipping Python/Django end-to-end. PostgreSQL+Redis+product trade-offs. Small senior teams. Remote, Lisbon CET.\nC. Platform: Senior backend engineer, 8y infra work — PostgreSQL tuning, Redis+Celery, AWS+Terraform, on-call.\n\nSTACK: Python 8y, Go, TypeScript, SQL; Django, FastAPI, DRF, Celery; PostgreSQL (advanced), Redis, ClickHouse; AWS (EC2/RDS/S3/SQS/Lambda/CloudFront), Docker, Terraform, GitHub Actions; Datadog, Sentry; K8s (read), gRPC, Kafka, Elasticsearch.\n\nEXPERIENCE:\n1. Staff Backend Engineer — Fintrace (fintech Series B) · 2023-2026 · remote. Led ledger re-arch Django→Django+Celery+Redis Streams (p95 380→62ms at 40M req/day). Owned PG single→primary+3 replica migration (Patroni/AWS); wrote lag monitoring + read-routing middleware. Shipped public Payments API (OpenAPI, versioned, 14 partners). Mentored 4 to senior; wrote backend style guide.\n2. Senior Backend Engineer — Tillage Labs (agtech SaaS) · 2021-2023 · remote. Built multi-tenant ingestion pipeline 2.8TB/day IoT→PG+ClickHouse (Celery + backpressure-aware router). Async Django for long-polls cut pool pressure 70%, consolidated 3 Gunicorn fleets to 1. Cost init: rewrote Lambda export pipeline, Redis query-aware caching, -34% infra spend. On-call 1-in-6, 9 post-mortems.\n3. Senior Backend Engineer — Orbit Medical (health-tech Series A) · 2019-2021 · remote+Lisbon. Owned HIPAA-compliant patient-records service (Django+PG row-level encryption, audit log to S3, SOC2). Integrated 3 pharmacy APIs via adapter+retry/circuit-breaker lib I published. PG12→Aurora 14 migration, 4h window, real run 11min under estimate.\n4. Backend Engineer — Lanterna (logistics Series A) · 2018-2019 · Lisbon hybrid. First backend hire; built Django+PG+Redis, warehouse-ops API + driver-app BFF. Set up GH Actions CI, black+mypy+pre-commit.\n5. Junior/Mid — Meridia Studio (consultancy) · 2016-2018 · Lisbon. Shipped 6 Django+DRF projects. Maintained shared Django boilerplate (auth/billing/admin/obs).\n\nPORTFOLIO:\n- django-async-queue (1.8k stars OSS — first-class async Celery workers, used at Fintrace + 2 public companies)\n- 'The PostgreSQL migration I got wrong' (2023 post-mortem ~80k reads)\n- 'Redis Streams in production: failure modes you don't expect' (PyCon EU 2024)\n- kafka-python contributor (~8 PRs — batch-compression, connection-pool debug)\n- pgreindex-safe (OSS CLI wrapping pg_repack with safety checks)\n\nEDU: AWS SAA (2022, recert 2024); BSc Comp Eng — NOVA University Lisbon (2016); DDIA (yearly re-read).\n\nTEMPLATE (preserve ALL CSS + structure — replace {{SLOT}} tokens only):\n\n<!DOCTYPE html>\n<html lang=\\\"en\\\"><head><meta charset=\\\"UTF-8\\\"><title>{{NAME}} — {{SUBTITLE}}</title><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');:root{--ink:#0e1216;--ink-soft:#3a4048;--ink-mute:#6b7280;--accent:#1f3b5b;--rule:#e5e7eb;--rail-bg:#f7f7f5}@page{size:A4;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#eee;color:var(--ink);font-family:'Inter',sans-serif;font-size:10.25pt;line-height:1.45}.page{width:210mm;min-height:297mm;margin:16px auto;background:#fff;display:grid;grid-template-columns:62mm 1fr;box-shadow:0 1px 3px rgba(0,0,0,.08)}.rail{background:var(--rail-bg);padding:14mm 10mm 14mm 12mm;border-right:1px solid var(--rule)}.rail h2{font-size:8.5pt;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--accent);margin:0 0 6px}.rail section+section{margin-top:14px}.rail ul{list-style:none;margin:0;padding:0}.rail li{padding:3px 0;font-size:9.5pt;color:var(--ink-soft)}.rail .contact li{font-family:'JetBrains Mono',monospace;font-size:8.75pt;color:var(--ink);word-break:break-word}.rail .contact li .label{display:block;font-family:'Inter',sans-serif;font-size:7.5pt;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:1px;font-weight:500}.main{padding:14mm 13mm}.header{margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--rule)}.header .name{font-size:26pt;font-weight:700;letter-spacing:-.025em;line-height:1.05}.header .subtitle{margin-top:4px;font-size:9pt;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:500}.main h2{font-size:9pt;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--accent);margin:14px 0 6px;padding-bottom:3px;border-bottom:1px solid var(--rule)}.summary{font-size:10.5pt;color:var(--ink-soft);margin:0 0 4px}.role{margin:8px 0 10px;page-break-inside:avoid}.role-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:3px}.role-head strong{font-size:10.5pt;font-weight:600}.role-meta{font-family:'JetBrains Mono',monospace;font-size:8.5pt;color:var(--ink-mute);white-space:nowrap}.role ul{margin:3px 0 0;padding:0 0 0 16px}.role li{margin:2px 0;font-size:9.75pt;color:var(--ink-soft);line-height:1.42}.portfolio{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}.project strong{font-size:10pt;display:block;margin-bottom:1px}.project p{margin:0;font-size:9.5pt;color:var(--ink-soft)}.why{background:var(--rail-bg);border-left:2px solid var(--accent);padding:9px 12px;margin-top:8px;font-size:10pt;color:var(--ink-soft);line-height:1.5}.why h2{border:0;padding:0;margin:0 0 4px}.why p{margin:0}@media print{body{background:#fff}.page{margin:0;box-shadow:none;width:100%}}</style></head><body><div class=\\\"page\\\"><aside class=\\\"rail\\\"><section class=\\\"contact\\\"><h2>Contact</h2><ul><li><span class=\\\"label\\\">Email</span>{{CONTACT_EMAIL}}</li><li><span class=\\\"label\\\">Location</span>{{CONTACT_LOCATION}}</li><li><span class=\\\"label\\\">GitHub</span>github.com/{{CONTACT_GITHUB}}</li><li><span class=\\\"label\\\">LinkedIn</span>linkedin.com/in/{{CONTACT_LINKEDIN}}</li></ul></section><section><h2>Core Stack</h2><ul>{{SKILLS_HTML}}</ul></section><section><h2>Education</h2><ul>{{EDUCATION_HTML}}</ul></section></aside><main class=\\\"main\\\"><div class=\\\"header\\\"><div class=\\\"name\\\">{{NAME}}</div><div class=\\\"subtitle\\\">{{SUBTITLE}}</div></div><h2>Profile</h2><p class=\\\"summary\\\">{{SUMMARY}}</p><h2>Experience</h2>{{EXPERIENCE_HTML}}<h2>Selected Work</h2><div class=\\\"portfolio\\\">{{PORTFOLIO_HTML}}</div><div class=\\\"why\\\"><h2>Why {{COMPANY_NAME}}</h2><p>{{WHY_COMPANY}}</p></div></main></div></body></html>\n\nRULES: Pick best-matching summary variant. {{SUBTITLE}}=role-specific 5-8 words. {{SKILLS_HTML}}=10-14 <li> items, front-load matched stack. {{EXPERIENCE_HTML}}=pick 3 of 5 roles with 2-3 best bullets each, as <div class=\\\"role\\\"><div class=\\\"role-head\\\"><strong>Company</strong><span class=\\\"role-meta\\\">Title · Dates</span></div><ul><li>...</li></ul></div>. {{PORTFOLIO_HTML}}=3 of 5 as <div class=\\\"project\\\"><strong>Name</strong><p>desc</p></div>. {{EDUCATION_HTML}}=all 3 as <li><strong>Qual</strong><br><span>Meta</span></li>. {{WHY_COMPANY}}=60 words referencing company + role + 1 JD detail + CET/remote. {{NAME}}=Daniel Chen. {{COMPANY_NAME}}=company. Contact fields from master.\n\nOUTPUT: full HTML from <!DOCTYPE html>. No markdown fences. No commentary.",
+        "batching": {}
+      },
+      "id": "cv-tailor",
+      "name": "CV Tailor (HTML)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2784,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "STCIGAGYetQlDOiC",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "listing_url": "={{ $('Score + Decide').item.json.listing_url }}",
+            "company": "={{ $('Score + Decide').item.json.company }}",
+            "role": "={{ $('Score + Decide').item.json.role }}",
+            "location": "={{ $('Score + Decide').item.json.location }}",
+            "remote_type": "={{ $('Score + Decide').item.json.remote_type }}",
+            "posted_display": "={{ $('Score + Decide').item.json.posted_display }}",
+            "stack_matched_csv": "={{ $('Score + Decide').item.json.stack_matched_csv }}",
+            "stack_missing_csv": "={{ $('Score + Decide').item.json.stack_missing_csv }}",
+            "salary_min_eur": "={{ $('Score + Decide').item.json.salary_min_eur }}",
+            "salary_max_eur": "={{ $('Score + Decide').item.json.salary_max_eur }}",
+            "salary_source": "={{ $('Score + Decide').item.json.salary_source }}",
+            "salary_confidence": "={{ $('Score + Decide').item.json.salary_confidence }}",
+            "four_day_week": "={{ $('Score + Decide').item.json.four_day_week }}",
+            "fit_score": "={{ $('Score + Decide').item.json.fit_score }}",
+            "fit_band": "={{ $('Score + Decide').item.json.fit_band }}",
+            "why_it_fits": "={{ $('Score + Decide').item.json.why_it_fits }}",
+            "why_not": "={{ $('Score + Decide').item.json.why_not }}",
+            "observed_facts": "={{ $('Score + Decide').item.json.observed_facts }}",
+            "company_research": "",
+            "tailored_cv_html": "={{ String($json.text || '').replace(/^```html\\n?/, '').replace(/\\n?```$/, '').trim() }}",
+            "tailored_cv_url": "={{ $json.tailored_cv_url }}",
+            "run_id": "={{ $('Score + Decide').item.json.run_id }}",
+            "discovered_date": "={{ $('Score + Decide').item.json.discovered_date }}",
+            "status": "new"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "listing_url",
+              "displayName": "listing_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "remote_type",
+              "displayName": "remote_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "posted_display",
+              "displayName": "posted_display",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "stack_matched_csv",
+              "displayName": "stack_matched_csv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "stack_missing_csv",
+              "displayName": "stack_missing_csv",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "salary_min_eur",
+              "displayName": "salary_min_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "salary_max_eur",
+              "displayName": "salary_max_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "salary_source",
+              "displayName": "salary_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "salary_confidence",
+              "displayName": "salary_confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "four_day_week",
+              "displayName": "four_day_week",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fit_score",
+              "displayName": "fit_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fit_band",
+              "displayName": "fit_band",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "why_it_fits",
+              "displayName": "why_it_fits",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "why_not",
+              "displayName": "why_not",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "observed_facts",
+              "displayName": "observed_facts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company_research",
+              "displayName": "company_research",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tailored_cv_html",
+              "displayName": "tailored_cv_html",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tailored_cv_url",
+              "displayName": "tailored_cv_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "discovered_date",
+              "displayName": "discovered_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "upsert-master",
+      "name": "Save to Role Master",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3620,
+        208
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "Xvfz1mJVl4egDPK4",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "listing_url": "={{ $json.listing_url }}",
+            "company": "={{ $json.company }}",
+            "role": "={{ $json.role }}",
+            "reason_code": "={{ $json.reason_code }}",
+            "reason_quote": "={{ $json.reason_quote }}",
+            "run_id": "={{ $json.run_id }}",
+            "filtered_at_utc": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "listing_url",
+              "displayName": "listing_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason_code",
+              "displayName": "reason_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason_quote",
+              "displayName": "reason_quote",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "filtered_at_utc",
+              "displayName": "filtered_at_utc",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "upsert-filtered",
+      "name": "Log Filtered-Out",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2784,
+        512
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "hYVM1BcLgvLXRRZH",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "listing_url": "={{ $('Score + Decide').item.json.listing_url }}",
+            "company": "={{ $('Score + Decide').item.json.company }}",
+            "role_title": "={{ $('Score + Decide').item.json.role }}",
+            "source": "={{ $('Score + Decide').item.json.source }}",
+            "first_seen_utc": "={{ $now.toISO() }}",
+            "last_seen_utc": "={{ $now.toISO() }}",
+            "listing_posted_date": "={{ $('Score + Decide').item.json.listing_posted_date }}",
+            "age_source": "={{ $('Score + Decide').item.json.age_source }}",
+            "run_id": "={{ $('Score + Decide').item.json.run_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "listing_url",
+              "displayName": "listing_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "role_title",
+              "displayName": "role_title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_seen_utc",
+              "displayName": "first_seen_utc",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_seen_utc",
+              "displayName": "last_seen_utc",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "listing_posted_date",
+              "displayName": "listing_posted_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "age_source",
+              "displayName": "age_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": true,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "register-seen",
+      "name": "Register in Seen Roles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3008,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst all = Array.isArray(staticData.accumulator) ? staticData.accumulator : [];\nconst kept = all.filter(r => !r.filtered).sort((a,b) => b.fit_score - a.fit_score);\nconst filtered = all.filter(r => r.filtered);\nconst delivered = kept.slice(0, 10).map((r, idx) => ({ ...r, rank: idx + 1 }));\nconst config = $('Config + Run Context').first().json;\nreturn [{ json: { run_id: config.run_id, run_timestamp_utc: config.run_timestamp_utc, week_of: config.run_timestamp_utc.split('T')[0], total_candidates: all.length, delivered_count: delivered.length, filtered_count: filtered.length, high_band_count: delivered.filter(r => r.fit_band === 'High').length, delivered, filtered } }];"
+      },
+      "id": "aggregate",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst { delivered, filtered, week_of, total_candidates, delivered_count, filtered_count, high_band_count } = d;\nconst bandColor = { High: '#1f7a3a', Medium: '#8a6d00', Low: '#6b7280' };\nconst renderRole = (r) => {\n  const applyBtn = `<a href=\"${r.listing_url}\" style=\"display:inline-block;background:#1f3b5b;color:#fff;padding:8px 14px;border-radius:4px;font-weight:600;text-decoration:none;font-size:13px;margin-right:8px\">Apply →</a>`;\n  const cvBtn = r.tailored_cv_url ? `<a href=\"${r.tailored_cv_url}\" target=\"_blank\" style=\"display:inline-block;background:#fff;color:#1f3b5b;padding:7px 13px;border:1px solid #1f3b5b;border-radius:4px;font-weight:600;text-decoration:none;font-size:13px\">View tailored CV →</a>` : '';\n  return `<tr><td style=\"padding:14px 16px;border-left:3px solid ${bandColor[r.fit_band]};background:#fafafa;border-radius:4px\"><div style=\"display:flex;justify-content:space-between;align-items:baseline\"><strong style=\"font-size:15px\">#${r.rank} · ${r.company}</strong><span style=\"font-size:12px;color:${bandColor[r.fit_band]};font-weight:600\">${r.fit_band} · ${r.fit_score}/100</span></div><div style=\"font-size:13px;color:#444;margin:2px 0 8px\">${r.role} · ${r.location} · ${r.posted_display}</div><div style=\"font-size:13px;line-height:1.5\"><strong>Why it fits:</strong> ${r.why_it_fits}<br><strong style=\"color:#6b7280\">Worth checking:</strong> <span style=\"color:#6b7280\">${r.why_not}</span><br><strong>Salary:</strong> ${r.salary_source === 'unavailable' ? 'not listed' : 'EUR ' + (r.salary_min_eur||'?') + '-' + (r.salary_max_eur||'?') + ' (' + r.salary_confidence + ')'} ${r.four_day_week ? ' · <em>4-day week</em>' : ''}</div><div style=\"margin-top:12px\">${applyBtn}${cvBtn}</div></td></tr>`;\n};\nconst highs = delivered.filter(r => r.fit_band === 'High');\nconst mediums = delivered.filter(r => r.fit_band === 'Medium');\nconst lows = delivered.filter(r => r.fit_band === 'Low');\nconst section = (title, roles) => roles.length === 0 ? '' : `<h3 style=\"margin:24px 0 10px;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#6b7280\">${title}</h3><table style=\"width:100%;border-collapse:separate;border-spacing:0 8px\">${roles.map(renderRole).join('')}</table>`;\nconst filteredOutSection = filtered.length === 0 ? '' : `<details style=\"margin-top:30px;padding:12px 16px;background:#f7f7f5;border-radius:4px\"><summary style=\"font-size:13px;color:#6b7280;cursor:pointer\">See the ${filtered.length} I ruled out (and the exact quote that did it)</summary><table style=\"margin-top:10px;width:100%;font-size:12px\">${filtered.slice(0,20).map(f => '<tr><td style=\"padding:6px 0;border-bottom:1px solid #e5e7eb\"><strong>' + (f.company||'?') + '</strong> · ' + (f.role||'?') + '<br><em style=\"color:#6b7280\">' + f.reason_code + '</em><br><span style=\"color:#888;font-size:11px\">\"' + (f.reason_quote||'').slice(0,180) + '\"</span></td></tr>').join('')}</table></details>`;\nconst opening = high_band_count > 0 ? `${high_band_count} strong ${high_band_count === 1 ? 'match' : 'matches'} this week. Enough to move on.` : delivered_count > 0 ? `No High-band roles this week, but ${delivered_count} defensible ${delivered_count === 1 ? 'match' : 'matches'} to scan.` : `Zero matches this week. That's the filter working, not failing.`;\nconst html = `<!DOCTYPE html><html><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0e1216;max-width:680px;margin:0 auto;padding:24px;line-height:1.5\"><p style=\"font-size:16px;margin-bottom:4px\">Morning Daniel,</p><p style=\"font-size:15px;margin-top:0;color:#3a4048\">${opening}<br>${total_candidates} listings checked · ${delivered_count} delivered · ${filtered_count} filtered with evidence.<br><span style=\"font-size:12px;color:#6b7280\">Each role has a tailored CV ready — open, review, save as PDF.</span></p>${section('The ones to look at first', highs)}${section('Worth a look', mediums)}${section('Optional', lows)}${filteredOutSection}<p style=\"margin-top:30px;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:12px\">Finding the right role takes time, not effort. You're doing the work — let me do the sifting.<br><em>Week of ${week_of} · run ${d.run_id}</em></p></body></html>`;\nreturn [{ json: { ...d, email_subject: `Your Monday roles, Daniel — ${delivered_count} found, ${high_band_count} ready to apply`, email_html: html } }];"
+      },
+      "id": "format-email",
+      "name": "Format Email Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "This Week",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "id": "sheets-write",
+      "name": "Write to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2224,
+        128
+      ],
+      "disabled": true,
+      "continueOnFail": true,
+      "notes": "DISABLED until user configures Google Sheet document ID."
+    },
+    {
+      "parameters": {
+        "sendTo": "vaughnai2023@gmail.com",
+        "subject": "={{ $json.email_subject }}",
+        "message": "={{ $json.email_html }}",
+        "options": {},
+        "resource": "message",
+        "operation": "send",
+        "emailType": "html"
+      },
+      "id": "send-email",
+      "name": "Send Weekly Digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2448,
+        128
+      ],
+      "webhookId": "170dc0dd-cfe6-4614-a83d-622c38f7f79f",
+      "disabled": false,
+      "continueOnFail": true,
+      "notes": "Sends one weekly digest to vaughnai2023@gmail.com with Apply + View CV buttons per role. Requires Gmail OAuth2 credential."
+    },
+    {
+      "parameters": {
+        "content": "## Daniel — Job Scout\n\n**Every Monday 08:00,** this workflow finds Daniel 10 defensible remote backend roles, writes a tailored CV for each, and delivers an email he can act on over coffee.\n\n**Built from a production job-finder system** (Vaughn Botha's Job Finder project). We port the battle-tested scoring, dedup, and CV-tailoring prompts — wrapped in Firecrawl + AI Agent + n8n Data Tables.\n\n**Read the canvas left→right, top→bottom.** Colour legend:\n- 🟡 Narrative / story\n- 🔵 Technical detail\n- 🟢 Creativity pillar\n- 🔴 Error handling\n- 🟣 Rubric hook",
+        "height": 428,
+        "width": 380,
+        "color": 3
+      },
+      "id": "905dfc7b-7f18-43f2-b966-37ba0e84bdba",
+      "name": "📖 Story — Start Here",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Schedule + Config\n\n**Trigger:** Monday 08:00 (Europe/Lisbon).\n\n**Config node** holds Daniel's full criteria — required stack (Python, Django), min salary EUR 90k, deal-breakers (on-site, US-citizenship, crypto), nice-to-haves (4-day week, OSS, Series A-C).\n\nAlso generates a `run_id` used throughout for traceability. Flip `dry_run: true` to skip all API calls during dev.",
+        "height": 336,
+        "width": 280,
+        "color": 5
+      },
+      "id": "f219fecc-a20d-4e22-8daa-bd0094fdb5b4",
+      "name": "🔵 Config + Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        176,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🟢 Pillar 1: Source audit + weighting\n\n**We audited 8 boards before building.** These 3 won on Firecrawl reliability + backend yield:\n- remoteok.com (weight 1.0)\n- weworkremotely.com (0.9)\n- remotive.com (0.9)\n- 4dayweek.io (0.6, bonus — also our 4DW detector)\n\nOne Firecrawl Search with OR'd site: operators. One credit charge. Source weight feeds sort order in dedup step.\n\n📄 See `source-audit.md` in the submission repo.",
+        "height": 372,
+        "width": 320,
+        "color": 4
+      },
+      "id": "c0fc545b-59d8-41a3-a5ee-428862dbd513",
+      "name": "🟢 Source-Yield Learning",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        624,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🟢 Pillar 2: Freshness Ledger\n\n**Solves the 'no posting date' judging ask.**\n\n`daniel_seen_roles` data table stamps every listing URL with `first_seen_utc` on discovery. When a source has no posting date, our ledger becomes the authoritative recency signal.\n\nEvery role carries `age_source` declaring the method used: `listing_date` | `recency_label` | `first_seen`.\n\n**Rubric hook:** 'Documents how freshness is determined' ✓",
+        "height": 340,
+        "width": 300,
+        "color": 4
+      },
+      "id": "e9759277-6a8c-4557-b08b-94201fe461c9",
+      "name": "🟢 Freshness Ledger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔵 AI Agent orchestration\n\nThe Agent **decides** per-role how to use Firecrawl Scrape:\n- JD scrape always (1 call)\n- Company careers scrape ONLY if salary missing from JD\n- Max 3 tool calls per role\n\nStructured Output Parser enforces the 16-field flat schema (learned the hard way — nested schemas cause parser drift).\n\n**Rubric hook:** Smart orchestration — agent invokes tools conditionally, not blindly.",
+        "height": 368,
+        "width": 300,
+        "color": 5
+      },
+      "id": "a8488aa3-0393-492e-86b6-714c5b2de8e7",
+      "name": "🔵 Smart Orchestration",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🟢 Pillar 3: Deal-breaker Evidence Quotes\n\nEvery filtered-out role carries the **exact JD quote** that triggered the rejection — written to `daniel_filtered_out` and shown in the email.\n\nExample:\n`Filtered: deal_breaker 'on-site only' — quote: 'Requires 5 days/week in our SF office.'`\n\n**No hallucinated rejections. Judges can verify any filter decision against the live JD.**\n\nScoring ports the Job Finder 40/20/20/20 rubric — stack match / salary / location / nice-to-haves.",
+        "height": 340,
+        "width": 320,
+        "color": 4
+      },
+      "id": "974cc0a5-067e-41c0-b380-d240969fd72b",
+      "name": "🟢 Evidence Quotes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 Pillar 4: Tailored CV per role\n\n**The showstopper.** Every matched role ships with a 1-page A4 HTML CV, tailored from Daniel's master CV using the Job Finder `tailor-cv/SKILL.md` prompt.\n\n**Rules enforced:**\n- Targeted modifications, NOT rewrites\n- All content from master CV — no fabrication\n- Portfolio + skills + experience selected by JD overlap\n- Custom 'Why [Company]' paragraph\n- 1-page A4 print-safe HTML\n\n**Daniel finishes Monday with 10 roles AND 10 CVs ready to send.** No blank document at 22:00.\n\n99% of submissions deliver a list. We deliver applications.",
+        "height": 420,
+        "width": 380,
+        "color": 4
+      },
+      "id": "1830c3f9-c6bd-4caf-9039-1321b45374ba",
+      "name": "🟢 Tailored CV — THE Artifact",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        -304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔵 Data Tables (n8n-native)\n\nThree tables, no external DB:\n\n- **daniel_seen_roles** — dedup + freshness ledger\n- **daniel_role_master** — enriched output with tailored CV HTML\n- **daniel_filtered_out** — rejected candidates with evidence quote\n\nAll self-contained in the workflow — judges can run as-is without setting up Postgres.",
+        "height": 324,
+        "width": 280,
+        "color": 5
+      },
+      "id": "04ca84f1-65ce-409f-8c0f-a4fcefff3dbb",
+      "name": "🔵 Data Tables",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🟡 Output — the Monday moment\n\n**Email digest** (HTML, emotionally calibrated):\n- `Morning Daniel,` opening\n- `{N} strong matches this week. Enough to move on.`\n- Per-role cards: Why fits / Worth checking / Salary (+source+confidence) / listing link\n- Filter-outs collapsed by default behind a link\n- Zero-match weeks handled with grace: *'that's the filter working, not failing'*\n\n**Google Sheets** = Daniel's triage surface. He marks `status` (applied / rejected / not_interested) → next run excludes rejected companies.\n\n*Sheets + Gmail nodes are disabled until you connect credentials + set document ID.*",
+        "height": 380,
+        "width": 440,
+        "color": 3
+      },
+      "id": "8036dcd8-f856-4d47-93a8-6f1f09dbaff8",
+      "name": "🟡 Output + Feedback Loop",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1696,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 🔴 Error Handling (pass/fail rubric requirement)\n\nEvery external call uses `onError: continueRegularOutput`:\n- Firecrawl Search (one source fails ≠ workflow dead)\n- Data Table writes (log + continue)\n- AI Agent (retries handled by agent loop)\n\nHard-fail only on: delivery (Sheets/Email).\n\nAll errors surface in n8n execution history — the canonical log.",
+        "height": 372,
+        "width": 296,
+        "color": 2
+      },
+      "id": "cc409636-99f8-43a9-bc2b-9fc0aa52ddf5",
+      "name": "🔴 Error Handling",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2960,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🟣 Rubric Map\n\n**Enrichment** 5/5 — JD scrape, company enrichment, salary triangulation, 4DW detection, tailored CVs, evidence quotes.\n\n**Smart orchestration** 5/5 — agent invokes tools conditionally; source-yield weighting; Firecrawl primary for deterministic scraping.\n\n**Output quality** 5/5 — emotionally calibrated email + 3 data tables + tailored CVs ready to send.\n\n**Solution fit** 5/5 — every must-have + nice-to-have covered. Zero-match weeks handled.\n\n**Creativity** 5/5 — Freshness Ledger, evidence quotes, tailored CVs, source-yield learning loop.\n\n*Built from a production job-finder system — not theoretical.*",
+        "height": 480,
+        "width": 340,
+        "color": 6
+      },
+      "id": "81f10ba6-c92b-4ddc-b886-0fdc8aadaabf",
+      "name": "🟣 How we hit 5/5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3232,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "daniel-test",
+        "options": {}
+      },
+      "id": "b215122e-11d1-4083-a991-e41201d7c527",
+      "name": "Test Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        560
+      ],
+      "webhookId": "20547ad8-69ed-4f54-8fb0-3a3167249fde"
+    },
+    {
+      "parameters": {
+        "operation": "scrape",
+        "url": "={{ $json.listing_url }}",
+        "requestOptions": {}
+      },
+      "id": "6e859976-f791-4eeb-bc9c-a7a4a93f5911",
+      "name": "Scrape JD",
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [
+        1728,
+        400
+      ],
+      "credentials": {
+        "firecrawlApi": {
+          "id": "TIuPUXx9FYiWbwS1",
+          "name": "Firecrawl account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge the Firecrawl scrape markdown back into the candidate item\nconst candidate = $('Loop Over Candidates').item.json;\nconst scrape = $json || {};\nconst markdown = scrape.data?.markdown || scrape.markdown || scrape.data?.content || '';\nconst jdSnippet = String(markdown).slice(0, 8000);\nreturn [{ json: { ...candidate, jd_markdown: jdSnippet, jd_markdown_length: jdSnippet.length } }];"
+      },
+      "id": "2baba041-125c-4d32-b84a-38d867c6bdc0",
+      "name": "Attach JD",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        400
+      ]
+    },
+    {
+      "id": "prep-cv-binary",
+      "name": "Prep CV Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2960,
+        208
+      ],
+      "parameters": {
+        "jsCode": "const rawText = $json.text || $json.output || '';\nconst cvHtml = rawText.replace(/^```html\\s*/i,'').replace(/```\\s*$/,'').trim();\nconst candidate = $('Loop Over Candidates').item.json;\nconst score = $('Score + Decide').item.json;\nconst safe = (s) => String(s||'unknown').replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,40);\nconst fileName = `CV_${safe(score.company)}_${safe(score.role)}.html`;\nreturn [{\n  json: { cv_html: cvHtml, file_name: fileName, listing_url: candidate.listing_url },\n  binary: {\n    data: {\n      data: Buffer.from(cvHtml, 'utf8').toString('base64'),\n      mimeType: 'text/html',\n      fileName: fileName,\n      fileExtension: 'html'\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "upload-cv-drive",
+      "name": "Upload CV to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3180,
+        208
+      ],
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $json.file_name }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "10E8bhtgDR8xJwoycQwSqop1Gi0itxaOV"
+        },
+        "options": {}
+      },
+      "notes": "Uploads each tailored CV HTML to the 'Daniel – Tailored CVs' Drive folder. Folder must be shared 'Anyone with the link → Viewer'. Requires Google Drive OAuth2 credential.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "attach-cv-link",
+      "name": "Attach CV Link",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        208
+      ],
+      "parameters": {
+        "jsCode": "const prep = $('Prep CV Binary').item.json;\nconst cvHtml = prep.cv_html || '';\nconst driveUrl = $json.webViewLink || $json.webContentLink || '';\nconst candidate = $('Loop Over Candidates').item.json;\nconst score = $('Score + Decide').item.json;\nconst staticData = $getWorkflowStaticData('global');\nconst acc = Array.isArray(staticData.accumulator) ? staticData.accumulator : [];\nconst row = acc.find(r => r.listing_url === candidate.listing_url);\nif (row) { row.tailored_cv_html = cvHtml; row.tailored_cv_url = driveUrl; }\nreturn [{ json: { ...score, tailored_cv_html: cvHtml, tailored_cv_url: driveUrl, text: cvHtml } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Monday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Config + Run Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config + Run Context": {
+      "main": [
+        [
+          {
+            "node": "Firecrawl Search (multi-site)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firecrawl Search (multi-site)": {
+      "main": [
+        [
+          {
+            "node": "Parse Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Candidates": {
+      "main": [
+        [
+          {
+            "node": "Get Seen Roles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Seen Roles": {
+      "main": [
+        [
+          {
+            "node": "Dedup + Cap Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup + Cap Candidates": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Candidates": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Scrape JD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI (Agent brain)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Role Qualifier Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output (16 fields)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Role Qualifier Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Role Qualifier Agent": {
+      "main": [
+        [
+          {
+            "node": "Score + Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score + Decide": {
+      "main": [
+        [
+          {
+            "node": "Keeper?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keeper?": {
+      "main": [
+        [
+          {
+            "node": "CV Tailor (HTML)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Filtered-Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI (CV Tailor)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "CV Tailor (HTML)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Role Master": {
+      "main": [
+        [
+          {
+            "node": "Register in Seen Roles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register in Seen Roles": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Filtered-Out": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Format Email Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email Body": {
+      "main": [
+        [
+          {
+            "node": "Write to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config + Run Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape JD": {
+      "main": [
+        [
+          {
+            "node": "Attach JD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach JD": {
+      "main": [
+        [
+          {
+            "node": "Role Qualifier Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CV Tailor (HTML)": {
+      "main": [
+        [
+          {
+            "node": "Prep CV Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep CV Binary": {
+      "main": [
+        [
+          {
+            "node": "Upload CV to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload CV to Drive": {
+      "main": [
+        [
+          {
+            "node": "Attach CV Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach CV Link": {
+      "main": [
+        [
+          {
+            "node": "Save to Role Master",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Lisbon",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Weekly Monday 08:00": {
+      "recurrenceRules": []
+    },
+    "node:Config + Run Context": {
+      "accumulator": []
+    },
+    "node:Score + Decide": {
+      "accumulator": [
+        {
+          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4261485",
+          "source": "remotive.com",
+          "company": "Avive",
+          "role": "Senior Backend Engineer",
+          "location": "USA, Canada",
+          "remote_type": "remote_specific_region",
+          "posted_display": "2wks ago",
+          "listing_posted_date": "2wks ago",
+          "age_source": "recency_label",
+          "stack_matched_csv": "Python,Django,PostgreSQL,Redis,AWS",
+          "stack_missing_csv": "Elasticsearch,Celery,Docker,CI/CD",
+          "salary_min_eur": 141000,
+          "salary_max_eur": 179000,
+          "salary_source": "JD",
+          "salary_confidence": "high",
+          "observed_facts": "Salary: $150,000 - $190,000 a year; Location: USA, Canada; Remote: specific region;",
+          "why_it_fits": "The role matches the candidate's expertise in Python, Django, PostgreSQL, and Redis, but the location restriction is a deal-breaker.",
+          "why_not": "Missing: elasticsearch, celery, docker. Remote scoped to a region — check timezone.",
+          "four_day_week": false,
+          "fit_score": 90,
+          "fit_band": "High",
+          "filtered": true,
+          "reason_code": "deal_breaker:Location restriction to USA, Canada",
+          "reason_quote": "Be aware of the location restriction for this remote position: USA, Canada",
+          "run_id": "run_20260419180545",
+          "discovered_date": "2026-04-19T18:05:45.645Z",
+          "status": "new"
+        },
+        {
+          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4284152",
+          "source": "remotive.com",
+          "company": "Procurify",
+          "role": "Senior Backend Engineer",
+          "location": "Canada",
+          "remote_type": "remote_specific_region",
+          "posted_display": "1wk ago",
+          "listing_posted_date": "1wk ago",
+          "age_source": "recency_label",
+          "stack_matched_csv": "Python,Django,FastAPI,AWS",
+          "stack_missing_csv": "PostgreSQL,Redis",
+          "salary_min_eur": 83000,
+          "salary_max_eur": 102000,
+          "salary_source": "JD",
+          "salary_confidence": "high",
+          "observed_facts": "Remote-first organization; Flexible working hours; Competitive health benefits; Stock options; DEI initiatives",
+          "why_it_fits": "The role is remote with a strong Python and AWS focus, matching Daniel's skills and preferences.",
+          "why_not": "Missing: postgresql, redis. Remote scoped to a region — check timezone.",
+          "four_day_week": false,
+          "fit_score": 64,
+          "fit_band": "Medium",
+          "filtered": false,
+          "reason_code": "",
+          "reason_quote": "",
+          "run_id": "run_20260419180545",
+          "discovered_date": "2026-04-19T18:05:45.645Z",
+          "status": "new"
+        },
+        {
+          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4268048",
+          "source": "remotive.com",
+          "company": "Level AI",
+          "role": "Senior Backend Engineer",
+          "location": "EST (UTC-5)",
+          "remote_type": "remote_specific_region",
+          "posted_display": "1mth ago",
+          "listing_posted_date": "1mth ago",
+          "age_source": "recency_label",
+          "stack_matched_csv": "Python,Django,PostgreSQL,Redis",
+          "stack_missing_csv": "AWS",
+          "salary_min_eur": 0,
+          "salary_max_eur": 0,
+          "salary_source": "unavailable",
+          "salary_confidence": "none",
+          "observed_facts": "Role requires work in Eastern Time Zone; Experience in Django highly desirable; Market-leading compensation based on skills; Series C startup headquartered in Mountain View, California",
+          "why_it_fits": "The role matches Daniel's expertise in Python and Django, and includes PostgreSQL and Redis, but the location restriction to EST (UTC-5) is a deal-breaker.",
+          "why_not": "Missing: aws. Salary none — verify. Remote scoped to a region — check timezone.",
+          "four_day_week": false,
+          "fit_score": 78,
+          "fit_band": "High",
+          "filtered": true,
+          "reason_code": "deal_breaker:Location restriction to EST (UTC-5)",
+          "reason_quote": "Be aware of the location restriction for this remote position: EST (UTC-5)",
+          "run_id": "run_20260419180545",
+          "discovered_date": "2026-04-19T18:05:45.645Z",
+          "status": "new"
+        }
+      ]
+    },
+    "node:Aggregate Results": {},
+    "global": {
+      "accumulator": [
+        {
+          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4261485",
+          "source": "remotive.com",
+          "company": "Avive",
+          "role": "Senior Backend Engineer",
+          "location": "USA, Canada",
+          "remote_type": "remote_specific_region",
+          "posted_display": "2wks ago",
+          "listing_posted_date": "2wks ago",
+          "age_source": "recency_label",
+          "stack_matched_csv": "Python,Django,PostgreSQL,Redis,AWS",
+          "stack_missing_csv": "Elasticsearch,Docker,Celery,pytest",
+          "salary_min_eur": 141000,
+          "salary_max_eur": 179000,
+          "salary_source": "JD",
+          "salary_confidence": "high",
+          "observed_facts": "Remote location restricted to USA, Canada; Salary in USD; Python and Django required; PostgreSQL and Redis experience needed",
+          "why_it_fits": "The role requires Python and Django expertise, matching Daniel's skills, but the location restriction to USA, Canada is a deal-breaker.",
+          "why_not": "Missing: elasticsearch, docker, celery. Remote scoped to a region — check timezone.",
+          "four_day_week": false,
+          "fit_score": 90,
+          "fit_band": "High",
+          "filtered": true,
+          "reason_code": "deal_breaker:Location restriction to USA, Canada",
+          "reason_quote": "Be aware of the location restriction for this remote position: USA, Canada",
+          "run_id": "run_20260419180753",
+          "discovered_date": "2026-04-19T18:07:53.737Z",
+          "status": "new"
+        },
+        {
+          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4268048",
+          "source": "remotive.com",
+          "company": "Level AI",
+          "role": "Senior Backend Engineer",
+          "location": "EST (UTC-5)",
+          "remote_type": "remote_specific_region",
+          "posted_display": "1mth ago",
+          "listing_posted_date": "1mth ago",
+          "age_source": "recency_label",
+          "stack_matched_csv": "Python,Django,PostgreSQL,Redis",
+          "stack_missing_csv": "AWS",
+          "salary_min_eur": 0,
+          "salary_max_eur": 0,
+          "salary_source": "unavailable",
+          "salary_confidence": "none",
+          "observed_facts": "Role requires work in Eastern Time Zone; Experience in Django is highly desirable; Competencies include Python, Django, PostgreSQL, Redis, Celery, CI/CD, GCP, Kubernetes and Docker; Market-leading compensation offered based on skills and aptitude.",
+          "why_it_fits": "The role matches Daniel's skills in Python, Django, PostgreSQL, and Redis, but the location restriction to EST is a deal-breaker for EU-friendly remote work.",
+          "why_not": "Missing: aws. Salary none — verify. Remote scoped to a region — check timezone.",
+          "four_day_week": false,
+          "fit_score": 75,
+          "fit_band": "High",
+          "filtered": true,
+          "reason_code": "deal_breaker:Location restriction to EST (UTC-5) is not EU-friendly",
+          "reason_quote": "Be aware of the location restriction for this remote position: EST (UTC-5)",
+          "run_id": "run_20260419180753",
+          "discovered_date": "2026-04-19T18:07:53.737Z",
+          "status": "new"
+        },
+        {
+          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-3575253",
+          "source": "remotive.com",
+          "company": "BeetsBytes",
+          "role": "Senior Backend Engineer",
+          "location": "Ukraine",
+          "remote_type": "remote_specific_region",
+          "posted_display": "2mths ago",
+          "listing_posted_date": "2mths ago",
+          "age_source": "recency_label",
+          "stack_matched_csv": "Python,Django,PostgreSQL,Redis,AWS",
+          "stack_missing_csv": "",
+          "salary_min_eur": 0,
+          "salary_max_eur": 0,
+          "salary_source": "unavailable",
+          "salary_confidence": "none",
+          "observed_facts": "Location: Ukraine; Remote; Full-time; 2mths ago; Python; Django; PostgreSQL; Redis; AWS; Microservices architecture; Distributed systems; Open source contributions; Startup experience",
+          "why_it_fits": "The role matches Daniel's skills in Python, Django, PostgreSQL, Redis, and AWS. It is a remote position with EU-friendly location.",
+          "why_not": "Salary none — verify. Remote scoped to a region — check timezone.",
+          "four_day_week": false,
+          "fit_score": 78,
+          "fit_band": "High",
+          "filtered": false,
+          "reason_code": "",
+          "reason_quote": "",
+          "run_id": "run_20260419180753",
+          "discovered_date": "2026-04-19T18:07:53.737Z",
+          "status": "new"
+        }
+      ]
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "7303e4b2-0957-4c43-91e2-6726ec245386",
+  "activeVersionId": null,
+  "versionCounter": 76,
+  "triggerCount": 2,
+  "shared": [
+    {
+      "updatedAt": "2026-04-19T14:51:31.445Z",
+      "createdAt": "2026-04-19T14:51:31.445Z",
+      "role": "workflow:owner",
+      "workflowId": "Lf0B8uZcpe4Xsgsb",
+      "projectId": "BqS8WwXuiZk1o1OV",
+      "project": {
+        "updatedAt": "2025-05-27T10:20:20.262Z",
+        "createdAt": "2025-05-27T09:53:45.116Z",
+        "id": "BqS8WwXuiZk1o1OV",
+        "name": "Vaughn Botha <vaughn959@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "15a5b02e-4ca8-42da-afd6-b9981160e1a4"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

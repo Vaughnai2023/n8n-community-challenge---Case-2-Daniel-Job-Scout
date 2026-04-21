@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daniel Chen — Senior Backend Engineer — Remote (EU Fintech)</title>
+<style>
+  @page { size: A4; margin: 12mm 16mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.4;
+    color: #2a2a2a;
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 12mm 16mm;
+  }
+
+  .header { margin-bottom: 10px; }
+  h1 {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #111;
+    letter-spacing: -0.3px;
+    margin-bottom: 1px;
+  }
+  .subtitle {
+    font-size: 11pt;
+    color: #555;
+    font-weight: 500;
+    margin-bottom: 5px;
+  }
+  .contact {
+    font-size: 8.5pt;
+    color: #666;
+  }
+  .contact a { color: #666; text-decoration: none; }
+
+  hr {
+    border: none;
+    border-top: 1.5px solid #ddd;
+    margin: 8px 0;
+  }
+
+  h2 {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 6px;
+    margin-top: 10px;
+  }
+
+  .portfolio-callout {
+    background: #f7f5f2;
+    border-left: 3px solid #1f3b5b;
+    padding: 10px 14px;
+    margin: 8px 0 6px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .portfolio-callout .portfolio-title {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 4px;
+  }
+  .portfolio-callout .portfolio-link {
+    display: inline-block;
+    font-size: 8.5pt;
+    color: #1f3b5b;
+    font-weight: 600;
+    text-decoration: none;
+    margin-bottom: 5px;
+  }
+  .portfolio-callout p {
+    font-size: 9pt;
+    color: #444;
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+  .portfolio-callout .portfolio-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+  }
+  .portfolio-callout .tag {
+    font-size: 7.5pt;
+    background: #e4e8ef;
+    color: #2f4a6b;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .skills-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px 16px;
+    margin-bottom: 4px;
+  }
+  .skill-group h3 {
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 3px;
+  }
+  .skill-group ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .skill-group li {
+    font-size: 8.5pt;
+    color: #555;
+    line-height: 1.45;
+  }
+
+  .role { margin-bottom: 8px; }
+  .role-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1px;
+  }
+  .role-header h3 {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #111;
+  }
+  .role-header .dates {
+    font-size: 8.5pt;
+    color: #888;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .role-context {
+    font-size: 8.5pt;
+    color: #777;
+    font-style: italic;
+    margin-bottom: 4px;
+  }
+  ul.bullets {
+    margin: 0 0 0 14px;
+    padding: 0;
+  }
+  ul.bullets li {
+    margin-bottom: 2px;
+    line-height: 1.4;
+  }
+  ul.bullets li strong {
+    color: #222;
+  }
+  ul.sub-bullets {
+    margin: 1px 0 2px 14px;
+    padding: 0;
+    list-style-type: "- ";
+  }
+  ul.sub-bullets li {
+    font-size: 8.5pt;
+    color: #555;
+    margin-bottom: 1px;
+  }
+
+  .projects-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 16px;
+  }
+  .project-item {
+    margin-bottom: 3px;
+  }
+  .project-item strong {
+    font-size: 9pt;
+    color: #222;
+  }
+  .project-item span {
+    font-size: 8.5pt;
+    color: #555;
+    display: block;
+    line-height: 1.35;
+  }
+
+  .why-section p {
+    font-size: 9pt;
+    color: #444;
+    line-height: 1.4;
+  }
+
+  @media print {
+    body { padding: 0; }
+    .portfolio-callout { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <h1>Daniel Chen</h1>
+  <div class="subtitle">Senior Backend Engineer — Python · Django · PostgreSQL at Scale</div>
+  <div class="contact">
+    daniel.chen.dev@example.com &nbsp;&bull;&nbsp;
+    <a href="https://github.com/danielchen-dev">github.com/danielchen-dev</a> &nbsp;&bull;&nbsp;
+    <a href="https://linkedin.com/in/danielchen-backend">linkedin.com/in/danielchen-backend</a> &nbsp;&bull;&nbsp;
+    Lisbon, Portugal (Remote, CET / UTC+1)
+  </div>
+</div>
+
+<hr>
+
+<!-- PORTFOLIO CALLOUT -->
+<div class="portfolio-callout">
+  <div class="portfolio-title">django-async-queue — open source (1.8k stars)</div>
+  <a class="portfolio-link" href="https://github.com/danielchen-dev/django-async-queue">github.com/danielchen-dev/django-async-queue &rarr;</a>
+  <p>First-class async Celery workers for Django. Battle-tested at Fintrace handling 40M requests/day and used at two public companies. Covers backpressure-aware routing, graceful shutdown, and lag-based autoscaling hooks.</p>
+  <div class="portfolio-tags">
+    <span class="tag">Python</span>
+    <span class="tag">Django</span>
+    <span class="tag">Celery</span>
+    <span class="tag">Redis Streams</span>
+    <span class="tag">PostgreSQL</span>
+    <span class="tag">AWS</span>
+    <span class="tag">OSS</span>
+  </div>
+</div>
+
+<!-- SKILLS -->
+<h2>Technical Skills</h2>
+<div class="skills-grid">
+  <div class="skill-group">
+    <h3>Core Stack</h3>
+    <ul>
+      <li>Python (8 yrs)</li>
+      <li>Django, DRF, FastAPI</li>
+      <li>PostgreSQL (advanced)</li>
+      <li>Redis (cache, streams, pub/sub)</li>
+      <li>Celery, async workers</li>
+    </ul>
+  </div>
+  <div class="skill-group">
+    <h3>Cloud &amp; Infra</h3>
+    <ul>
+      <li>AWS (RDS, S3, SQS, Lambda)</li>
+      <li>Terraform, Docker</li>
+      <li>GitHub Actions CI/CD</li>
+      <li>Kubernetes (read/debug)</li>
+      <li>Datadog, Sentry, Prometheus</li>
+    </ul>
+  </div>
+  <div class="skill-group">
+    <h3>Adjacent</h3>
+    <ul>
+      <li>Go (production-shipped)</li>
+      <li>TypeScript (backend)</li>
+      <li>ClickHouse (analytics)</li>
+      <li>Kafka (contributor)</li>
+      <li>gRPC, OpenAPI</li>
+    </ul>
+  </div>
+</div>
+
+<hr>
+
+<!-- EXPERIENCE -->
+<h2>Experience</h2>
+
+<div class="role">
+  <div class="role-header">
+    <h3>Staff Backend Engineer — Fintrace (fintech, Series B)</h3>
+    <span class="dates">Remote &bull; 2023 &ndash; Present</span>
+  </div>
+  <div class="role-context">Led a 6-engineer backend guild through a ledger re-architecture and API public launch.</div>
+  <ul class="bullets">
+    <li><strong>Ledger re-architecture, Django &rarr; Django + Celery + Redis Streams:</strong> owned design and rollout at 40M req/day.
+      <ul class="sub-bullets">
+        <li>p95 latency 380ms &rarr; 62ms, zero-downtime cutover across 14 services</li>
+        <li>Wrote the internal backend style guide; mentored 4 engineers to senior</li>
+      </ul>
+    </li>
+    <li><strong>PostgreSQL primary &rarr; primary + 3 replicas (Patroni on AWS):</strong> authored lag monitoring and read-routing middleware; ran the live migration.</li>
+    <li><strong>Public Payments API:</strong> OpenAPI-versioned, onboarded 14 external partners; owned backwards-compat policy and deprecation tooling.</li>
+  </ul>
+</div>
+
+<div class="role">
+  <div class="role-header">
+    <h3>Senior Backend Engineer — Tillage Labs (agtech SaaS)</h3>
+    <span class="dates">Remote &bull; 2021 &ndash; 2023</span>
+  </div>
+  <div class="role-context">Senior IC on a 4-person backend team owning ingestion and cost reduction.</div>
+  <ul class="bullets">
+    <li><strong>Multi-tenant ingestion pipeline, 2.8 TB/day IoT &rarr; PostgreSQL + ClickHouse:</strong> Celery with backpressure-aware router; 70% reduction in Django pool pressure via async long-polls.</li>
+    <li><strong>Cost initiative:</strong> rewrote the Lambda export pipeline and added Redis query-aware caching &mdash; 34% cut in infra spend over two quarters.</li>
+    <li><strong>On-call 1-in-6:</strong> authored 9 post-mortems; introduced runbook template now used company-wide.</li>
+  </ul>
+</div>
+
+<div class="role">
+  <div class="role-header">
+    <h3>Senior Backend Engineer — Orbit Medical (health-tech, Series A)</h3>
+    <span class="dates">Remote + Lisbon &bull; 2019 &ndash; 2021</span>
+  </div>
+  <div class="role-context">Owned the HIPAA-compliant patient-records service in a 3-engineer team.</div>
+  <ul class="bullets">
+    <li><strong>HIPAA + SOC2 patient records:</strong> Django + PostgreSQL row-level encryption, audit log to S3; passed SOC2 Type II on first attempt.</li>
+    <li><strong>Pharmacy-API integrations:</strong> 3 providers via an adapter + retry/circuit-breaker library I published internally, later open-sourced.</li>
+    <li><strong>PG 12 &rarr; Aurora 14 migration:</strong> planned 4-hour window, executed in 11 minutes under estimate, zero data loss.</li>
+  </ul>
+</div>
+
+<hr>
+
+<!-- ADDITIONAL PROJECTS -->
+<h2>Selected Work</h2>
+<div class="projects-grid">
+  <div class="project-item">
+    <strong>pgreindex-safe</strong>
+    <span>OSS CLI wrapping pg_repack with safety checks for production reindex operations.</span>
+  </div>
+  <div class="project-item">
+    <strong>kafka-python contributor</strong>
+    <span>~8 merged PRs — batch-compression fixes and connection-pool debugging.</span>
+  </div>
+  <div class="project-item">
+    <strong>Redis Streams in production</strong>
+    <span>PyCon EU 2024 talk on failure modes most teams discover the hard way.</span>
+  </div>
+  <div class="project-item">
+    <strong>"The PostgreSQL migration I got wrong"</strong>
+    <span>2023 post-mortem essay, ~80k reads. Still referenced in migration RFCs.</span>
+  </div>
+</div>
+
+<hr>
+
+<!-- WHY SECTION -->
+<h2>Why Ledgerline</h2>
+<div class="why-section">
+  <p>Ledgerline's job post describes a team that "ships ledger changes weekly on a 40M req/day Django monolith being carefully split" — that is exactly the rewrite I led at Fintrace (Django &rarr; Django + Celery + Redis Streams, p95 380ms &rarr; 62ms). The 4-day-week note and Lisbon HQ are an unusually clean fit: I'm CET, remote-first since 2020, and the overlap with your engineering hours is native. Happy to pair on your ledger architecture docs as a first-week exercise.</p>
+</div>
+
+</body>
+</html>

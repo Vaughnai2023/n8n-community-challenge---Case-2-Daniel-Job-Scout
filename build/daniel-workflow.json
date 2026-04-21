@@ -1,0 +1,438 @@
+{
+  "name": "M2 Case 2: Daniel — Job Scout v1",
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Weekly Monday 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 400],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "config",
+      "name": "Config + Run Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 400],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Daniel's criteria + source config + run context. Single source of truth.\nconst now = new Date();\nconst runId = `run_${now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;\n\nconst config = {\n  run_id: runId,\n  run_timestamp_utc: now.toISOString(),\n  dry_run: false,\n  criteria: {\n    role_keywords: ['senior backend engineer', 'staff backend engineer', 'backend engineer'],\n    stack_required: ['python', 'django'],\n    stack_preferred: ['postgresql', 'postgres', 'redis', 'aws'],\n    experience_years_target: 8,\n    salary_min_eur: 90000,\n    deal_breakers: ['on-site only', 'on site only', 'onsite only', 'requires us citizenship', 'us citizen only', 'crypto', 'web3', 'blockchain'],\n    nice_to_have: ['4-day week', 'four-day week', 'open source', 'series a', 'series b', 'series c'],\n    max_listing_age_days: 7,\n    location_rule: 'EU-friendly (UTC-1 to UTC+3) OR explicit Europe OR remote anywhere without US restriction'\n  },\n  sources: [\n    { name: 'remoteok.com', weight: 1.0, query_suffix: 'site:remoteok.com' },\n    { name: 'weworkremotely.com', weight: 0.9, query_suffix: 'site:weworkremotely.com' },\n    { name: 'remotive.com', weight: 0.9, query_suffix: 'site:remotive.com' },\n    { name: '4dayweek.io', weight: 0.6, query_suffix: 'site:4dayweek.io' }\n  ],\n  firecrawl: {\n    search_query: '\"senior backend engineer\" python django remote (site:remoteok.com OR site:weworkremotely.com OR site:remotive.com OR site:4dayweek.io) -crypto -web3',\n    search_limit: 20\n  },\n  candidate_cap: 15,\n  deliver_top_n: 10\n};\n\nreturn [{ json: config }];"
+      }
+    },
+    {
+      "id": "firecrawl-search",
+      "name": "Firecrawl Search (multi-site)",
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [680, 400],
+      "parameters": {
+        "resource": "MapSearch",
+        "operation": "search",
+        "query": "={{ $json.firecrawl.search_query }}",
+        "limit": "={{ $json.firecrawl.search_limit }}"
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "parse-candidates",
+      "name": "Parse Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Firecrawl Search returns an array of results, each with { url, title, description, markdown? }.\n// Normalize to candidate rows. Dedup within this batch by URL.\nconst raw = $input.all();\n\nconst seen = new Set();\nconst candidates = [];\n\nfor (const item of raw) {\n  const results = item.json?.data || item.json?.results || item.json?.web || (Array.isArray(item.json) ? item.json : [item.json]);\n  const resultArr = Array.isArray(results) ? results : [results];\n\n  for (const r of resultArr) {\n    const url = r.url || r.link || r.source_url;\n    if (!url || seen.has(url)) continue;\n    seen.add(url);\n\n    // Infer source from URL\n    let source = 'unknown';\n    if (url.includes('remoteok.com')) source = 'remoteok.com';\n    else if (url.includes('weworkremotely.com')) source = 'weworkremotely.com';\n    else if (url.includes('remotive.com')) source = 'remotive.com';\n    else if (url.includes('4dayweek.io')) source = '4dayweek.io';\n\n    candidates.push({\n      listing_url: url,\n      title: r.title || r.name || '',\n      description_snippet: r.description || r.snippet || (r.markdown || '').slice(0, 400),\n      source,\n      raw_markdown: r.markdown || null\n    });\n  }\n}\n\n// Attach run context from the Config node so downstream nodes have access\nconst config = $('Config + Run Context').first().json;\n\nreturn candidates.map(c => ({ json: { ...c, run_id: config.run_id, run_timestamp_utc: config.run_timestamp_utc, criteria: config.criteria } }));"
+      }
+    },
+    {
+      "id": "get-seen-roles",
+      "name": "Get Seen Roles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [1120, 400],
+      "parameters": {
+        "operation": "getRows",
+        "dataTableId": "hYVM1BcLgvLXRRZH",
+        "returnAll": true,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": []
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "dedup-filter",
+      "name": "Dedup + Cap Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Two inputs: [0] candidates from Parse Candidates, [1] seen rows from Data Table.\nconst candidates = $('Parse Candidates').all().map(i => i.json);\nconst seenRows = $('Get Seen Roles').all().map(i => i.json);\nconst config = $('Config + Run Context').first().json;\n\nconst seenSet = new Set(seenRows.map(r => r.listing_url).filter(Boolean));\n\n// Keep only NEW listings\nconst fresh = candidates.filter(c => !seenSet.has(c.listing_url));\n\n// Cap at candidate_cap — sort by source weight first so we prioritise higher-weight sources\nconst sourceWeights = Object.fromEntries(config.sources.map(s => [s.name, s.weight]));\nfresh.sort((a, b) => (sourceWeights[b.source] || 0) - (sourceWeights[a.source] || 0));\n\nconst capped = fresh.slice(0, config.candidate_cap);\n\n// Attach run context\nreturn capped.map(c => ({ json: { ...c, run_id: config.run_id, run_timestamp_utc: config.run_timestamp_utc, criteria: config.criteria } }));"
+      }
+    },
+    {
+      "id": "loop-candidates",
+      "name": "Loop Over Candidates",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1560, 400],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "agent-brain-model",
+      "name": "OpenAI (Agent brain)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.1,
+      "position": [1720, 600],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list"
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      }
+    },
+    {
+      "id": "agent-firecrawl-tool",
+      "name": "Firecrawl Scrape (Tool)",
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [1880, 600],
+      "parameters": {
+        "resource": "Scraping",
+        "operation": "scrape",
+        "url": "={{ $fromAI('url', 'The URL of the job listing or company careers page to scrape', 'string') }}"
+      }
+    },
+    {
+      "id": "agent-output-parser",
+      "name": "Structured Output (16 fields)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [2040, 600],
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"company\": \"Acme Corp\",\n  \"role\": \"Senior Backend Engineer\",\n  \"location\": \"Remote (Europe)\",\n  \"remote_type\": \"remote_anywhere\",\n  \"listing_posted_date\": \"2026-04-15\",\n  \"stack_matched_csv\": \"python,django,postgresql,redis\",\n  \"stack_missing_csv\": \"aws\",\n  \"deal_breaker_hit\": false,\n  \"deal_breaker_reason\": \"\",\n  \"deal_breaker_quote\": \"\",\n  \"salary_min_eur\": 95000,\n  \"salary_max_eur\": 120000,\n  \"salary_source\": \"listing\",\n  \"salary_confidence\": \"high\",\n  \"observed_facts_semicolon\": \"Remote-first; CET overlap required; 4-day week mentioned; Series B\",\n  \"why_it_fits\": \"Strong stack overlap on Python/Django/PostgreSQL, explicit CET overlap, salary clears threshold, Series B with open-source culture.\"\n}"
+      }
+    },
+    {
+      "id": "role-qualifier-agent",
+      "name": "Role Qualifier Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1720, 400],
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a senior technical recruiter qualifying a remote backend role for Daniel.\n\nDANIEL'S CRITERIA:\n- Senior/Staff Backend Engineer, 8 years experience\n- Required stack: Python, Django\n- Strong preference: PostgreSQL, Redis, AWS\n- Remote, EU-friendly timezone (UTC-1 to UTC+3 overlap OR explicit Europe mention OR remote-anywhere without US-only restriction)\n- Minimum salary: EUR 90,000 per year\n- Deal-breakers (HARD REJECT): on-site only, requires US citizenship, crypto/web3/blockchain\n- Nice-to-have: 4-day week, open source culture, Series A-C\n\nCANDIDATE LISTING:\n- Listing URL: {{ $json.listing_url }}\n- Title: {{ $json.title }}\n- Snippet: {{ $json.description_snippet }}\n- Source: {{ $json.source }}\n\nPROCESS:\n1. Use the firecrawl_scrape tool on the listing URL to get the full JD markdown.\n2. Extract all fields per the output schema from the JD.\n3. If salary missing from JD: you may scrape the company careers page (guess the domain if needed, e.g. /careers).\n4. Do NOT over-explore — after 1-3 tool calls return the structured output.\n\nCRITICAL EVIDENCE RULES:\n- If deal_breaker_hit=true, the deal_breaker_quote MUST be an exact substring (max 200 chars) of the JD text. Never invent.\n- For each matched stack item, it must appear as a substring of the JD text (case-insensitive).\n- Salary: prefer explicit listing salary. If none, use careers page. If still none, set salary_source='unavailable' and salary_confidence='none' — do not invent.\n- Date: extract posted date if present; otherwise leave empty.\n- remote_type: one of 'remote_anywhere' | 'remote_eu' | 'remote_specific_region' | 'hybrid' | 'onsite' | 'unclear'.\n\nReturn ONLY the structured output."
+      }
+    },
+    {
+      "id": "score-candidate",
+      "name": "Score + Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2260, 400],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Input: agent output (structured). Score it, derive fields, decide keeper vs filtered.\nconst parsed = $json.output || $json;\nconst candidate = $('Loop Over Candidates').item.json;\nconst config = $('Config + Run Context').first().json;\n\nconst stackMatched = (parsed.stack_matched_csv || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);\nconst stackMissing = (parsed.stack_missing_csv || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);\nconst obsFacts = (parsed.observed_facts_semicolon || '').toLowerCase();\n\n// Hard filters\nlet filtered = false;\nlet reasonCode = '';\nlet reasonQuote = '';\n\nif (parsed.deal_breaker_hit === true || parsed.deal_breaker_hit === 'true') {\n  filtered = true;\n  reasonCode = 'deal_breaker:' + (parsed.deal_breaker_reason || 'unknown');\n  reasonQuote = parsed.deal_breaker_quote || '';\n}\n\nif (!filtered && parsed.salary_max_eur && parsed.salary_max_eur > 0 && parsed.salary_max_eur < config.criteria.salary_min_eur && parsed.salary_confidence === 'high') {\n  filtered = true;\n  reasonCode = 'salary_below_threshold';\n  reasonQuote = `Salary ${parsed.salary_min_eur}-${parsed.salary_max_eur} EUR (source: ${parsed.salary_source})`;\n}\n\nif (!filtered && parsed.listing_posted_date) {\n  const ageDays = (Date.now() - new Date(parsed.listing_posted_date).getTime()) / 86400000;\n  if (ageDays > config.criteria.max_listing_age_days) {\n    filtered = true;\n    reasonCode = 'listing_too_old';\n    reasonQuote = `Posted ${parsed.listing_posted_date}, ${Math.round(ageDays)} days ago`;\n  }\n}\n\nif (!filtered && !['remote_anywhere', 'remote_eu', 'remote_specific_region'].includes(parsed.remote_type)) {\n  filtered = true;\n  reasonCode = 'location_mismatch:' + (parsed.remote_type || 'unclear');\n  reasonQuote = `remote_type=${parsed.remote_type}, location=${parsed.location}`;\n}\n\n// Scoring (ported from Job Finder evaluate-jobs 40/20/20/20)\nlet score = 40;\nconst stackKeywords = ['python', 'django', 'postgresql', 'postgres', 'redis', 'aws'];\nfor (const k of stackKeywords) {\n  if (stackMatched.some(s => s.includes(k))) score += 8;\n}\nscore = Math.min(score, 80);\n\nif (!stackMatched.includes('python') && !stackMatched.some(s => s.includes('python'))) score -= 15;\nif (!stackMatched.includes('django') && !stackMatched.some(s => s.includes('django'))) score -= 15;\n\nif (parsed.salary_min_eur >= config.criteria.salary_min_eur && parsed.salary_confidence === 'high') score += 10;\nif (parsed.salary_source === 'unavailable') score -= 5;\n\nif (parsed.remote_type === 'remote_eu' || parsed.remote_type === 'remote_anywhere') score += 5;\n\n// Nice-to-haves (4-day week, open source, funding)\nconst fourDayWeek = /4-?day|four-?day/i.test(obsFacts) || candidate.source === '4dayweek.io';\nif (fourDayWeek) score += 5;\nif (/open.?source/i.test(obsFacts)) score += 3;\nif (/series\\s+[abc]/i.test(obsFacts)) score += 3;\n\n// Freshness bonus\nif (parsed.listing_posted_date) {\n  const ageDays = (Date.now() - new Date(parsed.listing_posted_date).getTime()) / 86400000;\n  if (ageDays < 3) score += 4;\n}\n\nscore = Math.max(0, Math.min(100, score));\nconst band = score >= 75 ? 'High' : score >= 55 ? 'Medium' : 'Low';\n\n// why_not: construct a steelman\nconst whyNotParts = [];\nif (stackMissing.length > 0) whyNotParts.push(`Missing: ${stackMissing.slice(0, 3).join(', ')}.`);\nif (parsed.salary_confidence !== 'high') whyNotParts.push(`Salary ${parsed.salary_confidence || 'unknown'} — worth verifying.`);\nif (parsed.remote_type === 'remote_specific_region') whyNotParts.push(`Remote scoped to a specific region — check timezone.`);\nconst whyNot = whyNotParts.length > 0 ? whyNotParts.join(' ') : 'No obvious red flags beyond the listing-level data.';\n\n// Posted display + age_source\nlet postedDisplay, ageSource;\nif (parsed.listing_posted_date) {\n  const ageDays = Math.round((Date.now() - new Date(parsed.listing_posted_date).getTime()) / 86400000);\n  postedDisplay = `${ageDays}d ago (${parsed.listing_posted_date})`;\n  ageSource = 'listing_date';\n} else {\n  postedDisplay = `first seen ${config.run_timestamp_utc.split('T')[0]}`;\n  ageSource = 'first_seen';\n}\n\nreturn [{\n  json: {\n    listing_url: candidate.listing_url,\n    source: candidate.source,\n    company: parsed.company || 'unknown',\n    role: parsed.role || candidate.title || 'unknown',\n    location: parsed.location || 'unknown',\n    remote_type: parsed.remote_type || 'unclear',\n    posted_display: postedDisplay,\n    listing_posted_date: parsed.listing_posted_date || '',\n    age_source: ageSource,\n    stack_matched_csv: parsed.stack_matched_csv || '',\n    stack_missing_csv: parsed.stack_missing_csv || '',\n    salary_min_eur: parsed.salary_min_eur || 0,\n    salary_max_eur: parsed.salary_max_eur || 0,\n    salary_source: parsed.salary_source || 'unavailable',\n    salary_confidence: parsed.salary_confidence || 'none',\n    observed_facts: parsed.observed_facts_semicolon || '',\n    why_it_fits: parsed.why_it_fits || '',\n    why_not: whyNot,\n    four_day_week: fourDayWeek,\n    fit_score: score,\n    fit_band: band,\n    filtered,\n    reason_code: reasonCode,\n    reason_quote: reasonQuote,\n    run_id: config.run_id,\n    discovered_date: config.run_timestamp_utc,\n    status: 'new'\n  }\n}];"
+      }
+    },
+    {
+      "id": "if-keeper",
+      "name": "Keeper?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2480, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.filtered }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cv-tailor-model",
+      "name": "OpenAI (CV Tailor)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.1,
+      "position": [2700, 300],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      }
+    },
+    {
+      "id": "cv-tailor",
+      "name": "CV Tailor (HTML)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [2700, 200],
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are tailoring Daniel Chen's CV for a specific role. Produce a 1-page A4 HTML CV using the provided template.\n\nINPUT\nRole: {{ $json.role }}\nCompany: {{ $json.company }}\nLocation: {{ $json.location }}\nListing URL: {{ $json.listing_url }}\nStack matched: {{ $json.stack_matched_csv }}\nStack missing: {{ $json.stack_missing_csv }}\nWhy it fits: {{ $json.why_it_fits }}\nObserved facts: {{ $json.observed_facts }}\n\nDANIEL'S MASTER CV (lift content ONLY from here — no fabrication):\n\n--- START MASTER CV ---\nName: Daniel Chen\nContact: daniel.chen.dev@example.com · Remote · Lisbon, Portugal (CET/UTC+1) · github.com/danielchen-dev · linkedin.com/in/danielchen-backend\n\nSUMMARY VARIANTS:\nA. Distributed systems / scale: Senior backend engineer with 8 years building high-throughput Python/Django services on AWS. Comfortable owning systems from PostgreSQL schema design through Redis-backed caches and async workers. Have shipped production systems handling 40M+ requests/day. Remote-first since 2020.\nB. Product-focused: Senior backend engineer, 8 years shipping Python/Django products end-to-end. Equally at home designing PostgreSQL schema, wiring Redis queues, and pairing with product on the right trade-off. Prefer small senior teams that ship weekly. Remote-first, based in Lisbon (CET).\nC. Platform/infra: Senior backend engineer with 8 years of hands-on infrastructure work — PostgreSQL performance tuning, Redis + Celery pipelines, AWS + Terraform, incident-response rotations.\n\nCORE STACK: Python (8y), Go (conversational), TypeScript, SQL; Django, FastAPI, DRF, Celery; PostgreSQL (advanced), Redis, ClickHouse; AWS (EC2/RDS/S3/SQS/Lambda/CloudFront), Docker, Terraform, GitHub Actions; Datadog, Sentry, Prometheus/Grafana; Kubernetes (read-level), gRPC, Kafka (contributor), Elasticsearch.\n\nEXPERIENCE:\n1. Staff Backend Engineer — Fintrace (fintech, Series B) · 2023-2026 · remote\n   - Led re-architecture of transaction-ledger service from Django monolith to Django+Celery+Redis Streams hybrid — cut p95 latency from 380ms to 62ms at 40M requests/day.\n   - Owned PostgreSQL migration from single primary to primary+3 read-replicas (Patroni on AWS); wrote replica-lag monitoring + read-routing Django middleware.\n   - Designed and shipped the public Payments API (OpenAPI, versioned, rate-limited) — 14 partner integrations.\n   - Mentored 4 mid-level engineers through senior progression; wrote internal Backend style guide.\n2. Senior Backend Engineer — Tillage Labs (agtech SaaS) · 2021-2023 · remote\n   - Built multi-tenant data-ingestion pipeline processing 2.8 TB/day IoT data into PostgreSQL+ClickHouse, Celery workers, custom backpressure-aware router.\n   - Introduced async Django views for long-polling endpoints — reduced connection-pool pressure 70%, consolidated 3 Gunicorn fleets to 1.\n   - Led AWS-cost-reduction initiative — rewrote batch-export Lambda pipeline, query-aware Redis caching, cut monthly infra spend 34%.\n   - On-call rotation (1-in-6), 9 post-mortem documents.\n3. Senior Backend Engineer — Orbit Medical (health-tech, Series A) · 2019-2021 · remote+Lisbon\n   - Owned HIPAA-compliant patient-records service — Django+PostgreSQL with row-level encryption, audit-log stream to S3, SOC2-ready access controls.\n   - Integrated 3 pharmacy APIs (Surescripts, RxNT, Change Healthcare) using adapter pattern + retry/circuit-breaker library I published internally.\n   - Migrated on-premise PostgreSQL 12 to AWS RDS Aurora 14 in a 4-hour window — real migration ran 11 minutes under estimate.\n4. Backend Engineer — Lanterna (logistics, Series A) · 2018-2019 · Lisbon hybrid\n   - First backend hire. Built initial Django+PostgreSQL+Redis stack, shipped warehouse-operations API and driver-mobile-app BFF.\n   - Set up GitHub Actions CI, introduced pre-commit + black + mypy to untyped codebase.\n5. Junior/Mid Backend Engineer — Meridia Studio (consultancy) · 2016-2018 · Lisbon\n   - Shipped Django+DRF backends for 6 client projects across e-commerce, travel, logistics.\n   - Maintained shared internal Django boilerplate (auth, billing, admin, observability) used as starting point for every new engagement.\n\nPORTFOLIO:\n- django-async-queue (1.8k stars, OSS lib for first-class async Celery workers in Django — production-used at Fintrace + 2 public companies)\n- 'The PostgreSQL migration I got wrong' (2023 post-mortem, ~80k reads)\n- 'Redis Streams in production: the failure modes we didn't expect' — PyCon EU 2024 talk\n- kafka-python contributor (~8 merged PRs — batch-compression, connection-pool debugging)\n- pgreindex-safe (OSS CLI wrapping pg_repack with safety checks)\n\nEDUCATION: AWS Solutions Architect — Associate (2022, recert 2024); BSc Computer Engineering — NOVA University Lisbon (2016); Designing Data-Intensive Applications (re-read yearly).\n--- END MASTER CV ---\n\nTEMPLATE (fill the {{SLOT}} placeholders with tailored HTML — preserve ALL CSS and structure):\n\n{{TEMPLATE_PLACEHOLDER}}\n\nRULES\n1. Pick the summary variant that best matches the role (A/B/C above). Use it verbatim for {{SUMMARY}}.\n2. {{SUBTITLE}}: role-specific headline derived from the JD (e.g., \"Senior Backend Engineer — Distributed Systems & Redis\"). 5-8 words.\n3. {{SKILLS_HTML}}: reorder core stack. Front-load skills present in stack_matched_csv. Output <li>Skill</li> items, one per line. 10-14 items.\n4. {{EXPERIENCE_HTML}}: pick 3 of the 5 roles that best match. Within each role, lead with 2-3 bullets most relevant to the JD (lift from the master, do NOT rewrite or invent). Output as <div class=\"role\"> blocks per the template spec.\n5. {{PORTFOLIO_HTML}}: pick 3 of 5 portfolio items most relevant. Output as <div class=\"project\"> blocks with a <strong> name and a <p> one-line description.\n6. {{EDUCATION_HTML}}: include all 3 education items as <li><strong>Qual</strong><br><span>Meta</span></li>.\n7. {{WHY_COMPANY}}: 60-word paragraph referencing the company name, the role, 1 specific JD detail, and CET/remote fit.\n8. {{COMPANY_NAME}}: the company name.\n9. {{NAME}}: Daniel Chen. {{CONTACT_EMAIL}}, {{CONTACT_LOCATION}}, {{CONTACT_GITHUB}}, {{CONTACT_LINKEDIN}}: from master CV contact line.\n\nOUTPUT: the FULL HTML document with all placeholders filled. Do not add markdown formatting. Do not add explanation. Output pure HTML starting with <!DOCTYPE html>.",
+        "hasOutputParser": false
+      }
+    },
+    {
+      "id": "upsert-master",
+      "name": "Save to Role Master",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [2920, 200],
+      "parameters": {
+        "operation": "insertRows",
+        "dataTableId": "STCIGAGYetQlDOiC",
+        "data": {
+          "listing_url": "={{ $('Score + Decide').item.json.listing_url }}",
+          "company": "={{ $('Score + Decide').item.json.company }}",
+          "role": "={{ $('Score + Decide').item.json.role }}",
+          "location": "={{ $('Score + Decide').item.json.location }}",
+          "remote_type": "={{ $('Score + Decide').item.json.remote_type }}",
+          "posted_display": "={{ $('Score + Decide').item.json.posted_display }}",
+          "stack_matched_csv": "={{ $('Score + Decide').item.json.stack_matched_csv }}",
+          "stack_missing_csv": "={{ $('Score + Decide').item.json.stack_missing_csv }}",
+          "salary_min_eur": "={{ $('Score + Decide').item.json.salary_min_eur }}",
+          "salary_max_eur": "={{ $('Score + Decide').item.json.salary_max_eur }}",
+          "salary_source": "={{ $('Score + Decide').item.json.salary_source }}",
+          "salary_confidence": "={{ $('Score + Decide').item.json.salary_confidence }}",
+          "four_day_week": "={{ $('Score + Decide').item.json.four_day_week }}",
+          "fit_score": "={{ $('Score + Decide').item.json.fit_score }}",
+          "fit_band": "={{ $('Score + Decide').item.json.fit_band }}",
+          "why_it_fits": "={{ $('Score + Decide').item.json.why_it_fits }}",
+          "why_not": "={{ $('Score + Decide').item.json.why_not }}",
+          "observed_facts": "={{ $('Score + Decide').item.json.observed_facts }}",
+          "company_research": "",
+          "tailored_cv_html": "={{ $json.text || $json.output || '' }}",
+          "tailored_cv_url": "",
+          "run_id": "={{ $('Score + Decide').item.json.run_id }}",
+          "discovered_date": "={{ $('Score + Decide').item.json.discovered_date }}",
+          "status": "new"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "upsert-filtered",
+      "name": "Log Filtered-Out",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [2700, 500],
+      "parameters": {
+        "operation": "insertRows",
+        "dataTableId": "Xvfz1mJVl4egDPK4",
+        "data": {
+          "listing_url": "={{ $json.listing_url }}",
+          "company": "={{ $json.company }}",
+          "role": "={{ $json.role }}",
+          "reason_code": "={{ $json.reason_code }}",
+          "reason_quote": "={{ $json.reason_quote }}",
+          "run_id": "={{ $json.run_id }}",
+          "filtered_at_utc": "={{ $now.toISO() }}"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "register-seen",
+      "name": "Register in Seen Roles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [2920, 400],
+      "parameters": {
+        "operation": "insertRows",
+        "dataTableId": "hYVM1BcLgvLXRRZH",
+        "data": {
+          "listing_url": "={{ $('Score + Decide').item.json.listing_url }}",
+          "company": "={{ $('Score + Decide').item.json.company }}",
+          "role_title": "={{ $('Score + Decide').item.json.role }}",
+          "source": "={{ $('Score + Decide').item.json.source }}",
+          "first_seen_utc": "={{ $now.toISO() }}",
+          "last_seen_utc": "={{ $now.toISO() }}",
+          "listing_posted_date": "={{ $('Score + Decide').item.json.listing_posted_date }}",
+          "age_source": "={{ $('Score + Decide').item.json.age_source }}",
+          "run_id": "={{ $('Score + Decide').item.json.run_id }}"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "id": "aggregate",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 120],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Collect the Score + Decide outputs from the loop. Sort. Annotate top ranks.\nconst all = $('Score + Decide').all().map(i => i.json);\nconst kept = all.filter(r => !r.filtered).sort((a, b) => b.fit_score - a.fit_score);\nconst filtered = all.filter(r => r.filtered);\n\nconst topN = 10;\nconst delivered = kept.slice(0, topN).map((r, idx) => ({ ...r, rank: idx + 1 }));\n\nconst config = $('Config + Run Context').first().json;\n\nreturn [{\n  json: {\n    run_id: config.run_id,\n    run_timestamp_utc: config.run_timestamp_utc,\n    week_of: config.run_timestamp_utc.split('T')[0],\n    total_candidates: all.length,\n    delivered_count: delivered.length,\n    filtered_count: filtered.length,\n    high_band_count: delivered.filter(r => r.fit_band === 'High').length,\n    delivered,\n    filtered\n  }\n}];"
+      }
+    },
+    {
+      "id": "format-email",
+      "name": "Format Email Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 120],
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// Build the HTML email body. Emotionally calibrated — caring co-pilot, not dashboard.\nconst d = $json;\nconst { delivered, filtered, week_of, total_candidates, delivered_count, filtered_count, high_band_count } = d;\n\nconst bandColor = { High: '#1f7a3a', Medium: '#8a6d00', Low: '#6b7280' };\n\nconst renderRole = (r) => `\n  <tr><td style=\"padding:14px 16px;border-left:3px solid ${bandColor[r.fit_band] || '#6b7280'};background:#fafafa;border-radius:4px;\">\n    <div style=\"display:flex;justify-content:space-between;align-items:baseline;\">\n      <strong style=\"font-size:15px;\">#${r.rank} · ${r.company}</strong>\n      <span style=\"font-size:12px;color:${bandColor[r.fit_band]};font-weight:600;\">${r.fit_band} · ${r.fit_score}/100</span>\n    </div>\n    <div style=\"font-size:13px;color:#444;margin:2px 0 8px 0;\">${r.role} · ${r.location} · ${r.posted_display}</div>\n    <div style=\"font-size:13px;line-height:1.5;\">\n      <strong>Why it fits:</strong> ${r.why_it_fits}<br>\n      <strong style=\"color:#6b7280;\">Worth checking:</strong> <span style=\"color:#6b7280;\">${r.why_not}</span><br>\n      <strong>Salary:</strong> ${r.salary_source === 'unavailable' ? 'not listed (worth verifying in the application)' : `EUR ${r.salary_min_eur?.toLocaleString() || '?'}-${r.salary_max_eur?.toLocaleString() || '?'} (${r.salary_confidence} confidence, from ${r.salary_source})`} ${r.four_day_week ? ' · 🗓 <em>4-day week</em>' : ''}\n    </div>\n    <div style=\"margin-top:10px;font-size:13px;\">\n      <a href=\"${r.listing_url}\" style=\"color:#1f3b5b;font-weight:600;text-decoration:none;margin-right:14px;\">View listing →</a>\n    </div>\n  </td></tr>`;\n\nconst highs = delivered.filter(r => r.fit_band === 'High');\nconst mediums = delivered.filter(r => r.fit_band === 'Medium');\nconst lows = delivered.filter(r => r.fit_band === 'Low');\n\nconst section = (title, roles) => roles.length === 0 ? '' : `\n  <h3 style=\"margin:24px 0 10px 0;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#6b7280;\">${title}</h3>\n  <table style=\"width:100%;border-collapse:separate;border-spacing:0 8px;\">${roles.map(renderRole).join('')}</table>`;\n\nconst filteredOutSection = filtered.length === 0 ? '' : `\n  <details style=\"margin-top:30px;padding:12px 16px;background:#f7f7f5;border-radius:4px;\">\n    <summary style=\"font-size:13px;color:#6b7280;cursor:pointer;\">See the ${filtered.length} I ruled out (and the exact quote that did it)</summary>\n    <table style=\"margin-top:10px;width:100%;font-size:12px;border-collapse:collapse;\">\n      ${filtered.slice(0, 20).map(f => `<tr><td style=\"padding:6px 0;border-bottom:1px solid #e5e7eb;\"><strong>${f.company || '?'}</strong> · ${f.role || '?'}<br><em style=\"color:#6b7280;\">${f.reason_code}</em><br><span style=\"color:#888;font-size:11px;\">\"${(f.reason_quote || '').slice(0,180)}\"</span></td></tr>`).join('')}\n    </table>\n  </details>`;\n\nconst openingLine = high_band_count > 0\n  ? `${high_band_count} strong ${high_band_count === 1 ? 'match' : 'matches'} this week. Enough to move on.`\n  : delivered_count > 0\n    ? `No High-band roles this week, but ${delivered_count} defensible ${delivered_count === 1 ? 'match' : 'matches'} to scan.`\n    : `Zero matches this week. That's the filter working, not failing — the sources I checked are logged below.`;\n\nconst html = `<!DOCTYPE html>\n<html><body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0e1216;max-width:680px;margin:0 auto;padding:24px;line-height:1.5;\">\n  <p style=\"font-size:16px;margin-bottom:4px;\">Morning Daniel,</p>\n  <p style=\"font-size:15px;margin-top:0;color:#3a4048;\">\n    ${openingLine}<br>\n    ${total_candidates} listings checked · ${delivered_count} delivered · ${filtered_count} filtered out with evidence.\n  </p>\n\n  ${section('The ones to look at first', highs)}\n  ${section('Worth a look', mediums)}\n  ${section('Optional — lower priority', lows)}\n  ${filteredOutSection}\n\n  <p style=\"margin-top:30px;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:12px;\">\n    Finding the right role takes time, not effort. You're doing the work — let me do the sifting.<br>\n    <em>Week of ${week_of} · run ${d.run_id}</em>\n  </p>\n</body></html>`;\n\nreturn [{ json: { ...d, email_subject: `Your Monday roles, Daniel — ${delivered_count} found, ${high_band_count} ready to apply`, email_html: html } }];"
+      }
+    },
+    {
+      "id": "sheets-write",
+      "name": "Write to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2220, 120],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "This Week",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "continueOnFail": true,
+      "disabled": true,
+      "notes": "DISABLED until user configures the Google Sheet document ID. Enable after setup."
+    },
+    {
+      "id": "send-email",
+      "name": "Send Weekly Digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2440, 120],
+      "parameters": {
+        "sendTo": "={{ $json.recipient || 'daniel.chen.dev@example.com' }}",
+        "subject": "={{ $json.email_subject }}",
+        "emailType": "html",
+        "message": "={{ $json.email_html }}",
+        "options": {}
+      },
+      "continueOnFail": true,
+      "disabled": true,
+      "notes": "DISABLED until user connects Gmail credentials. Enable after setup."
+    }
+  ],
+  "connections": {
+    "Weekly Monday 08:00": {
+      "main": [[{ "node": "Config + Run Context", "type": "main", "index": 0 }]]
+    },
+    "Config + Run Context": {
+      "main": [[{ "node": "Firecrawl Search (multi-site)", "type": "main", "index": 0 }]]
+    },
+    "Firecrawl Search (multi-site)": {
+      "main": [[{ "node": "Parse Candidates", "type": "main", "index": 0 }]]
+    },
+    "Parse Candidates": {
+      "main": [[{ "node": "Get Seen Roles", "type": "main", "index": 0 }]]
+    },
+    "Get Seen Roles": {
+      "main": [[{ "node": "Dedup + Cap Candidates", "type": "main", "index": 0 }]]
+    },
+    "Dedup + Cap Candidates": {
+      "main": [[{ "node": "Loop Over Candidates", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Candidates": {
+      "main": [
+        [{ "node": "Aggregate Results", "type": "main", "index": 0 }],
+        [{ "node": "Role Qualifier Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI (Agent brain)": {
+      "ai_languageModel": [[{ "node": "Role Qualifier Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Firecrawl Scrape (Tool)": {
+      "ai_tool": [[{ "node": "Role Qualifier Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Structured Output (16 fields)": {
+      "ai_outputParser": [[{ "node": "Role Qualifier Agent", "type": "ai_outputParser", "index": 0 }]]
+    },
+    "Role Qualifier Agent": {
+      "main": [[{ "node": "Score + Decide", "type": "main", "index": 0 }]]
+    },
+    "Score + Decide": {
+      "main": [[{ "node": "Keeper?", "type": "main", "index": 0 }]]
+    },
+    "Keeper?": {
+      "main": [
+        [{ "node": "CV Tailor (HTML)", "type": "main", "index": 0 }],
+        [{ "node": "Log Filtered-Out", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI (CV Tailor)": {
+      "ai_languageModel": [[{ "node": "CV Tailor (HTML)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "CV Tailor (HTML)": {
+      "main": [[{ "node": "Save to Role Master", "type": "main", "index": 0 }]]
+    },
+    "Save to Role Master": {
+      "main": [[{ "node": "Register in Seen Roles", "type": "main", "index": 0 }]]
+    },
+    "Register in Seen Roles": {
+      "main": [[{ "node": "Loop Over Candidates", "type": "main", "index": 0 }]]
+    },
+    "Log Filtered-Out": {
+      "main": [[{ "node": "Loop Over Candidates", "type": "main", "index": 0 }]]
+    },
+    "Aggregate Results": {
+      "main": [[{ "node": "Format Email Body", "type": "main", "index": 0 }]]
+    },
+    "Format Email Body": {
+      "main": [[{ "node": "Write to Google Sheet", "type": "main", "index": 0 }]]
+    },
+    "Write to Google Sheet": {
+      "main": [[{ "node": "Send Weekly Digest", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timezone": "Europe/Lisbon"
+  },
+  "staticData": null,
+  "pinData": {},
+  "tags": []
+}

@@ -40,16 +40,16 @@ Phase 0 audit selected 3 core + 1 bonus source (see `source-audit.md`). The work
 ```
 Schedule Monday 08:00
   → Config (criteria + sources + run_id)
-  → Setup: Ensure daniel_seen_roles / daniel_role_master / daniel_filtered_out
-      (3 table.create nodes, createIfNotExists:true — idempotent zero-touch setup)
   → Firecrawl Search (multi-site, one call)
+  (Note: idempotent table-creation nodes are v2 — current v1 references the author's table IDs;
+   judges importing on a fresh instance create the 3 tables manually first. See §6.)
   → Parse Candidates (Code)
   → Get Seen Roles (Data Table, resolved by name)
   → Dedup + Cap (Code, sort by source weight)
   → Loop (SplitInBatches, batch=1)
     │
+    │  (Firecrawl Scrape JD inline — see §7b for why this is NOT an agent tool)
     │  Role Qualifier AGENT ────┬── OpenAI gpt-4o (brain)
-    │                            ├── Firecrawl Scrape (Tool)
     │                            └── Structured Output Parser (16 flat fields)
     │
     → Score + Decide (Code — ports Job Finder 40/20/20/20 rubric)
@@ -73,7 +73,7 @@ Schedule Monday 08:00
 | Criterion | Evidence in the workflow |
 |---|---|
 | **Enrichment depth** | 6 layers: JD deep parse (AI Agent), stack matching with JD-substring evidence, salary triangulation (listing → careers → unavailable, with `salary_source` + `salary_confidence`), 4DW detection, `why_it_fits` + steelman `why_not`, tailored CV per role. |
-| **Smart orchestration** | Agent decides per-role: JD scrape always; careers-page scrape ONLY if salary missing. Source weighting informs candidate ordering. Dedup via Data Table. Loop with batch=1 + 90s timeout. Firecrawl as deterministic tool, LLM for interpretation. |
+| **Smart orchestration** | Deterministic JD scrape (regular Firecrawl Scrape node) feeds the AI Agent, which extracts 16 structured fields via `StructuredOutputParser`. Source weighting informs candidate ordering. Dedup via Data Table. Per-role loop. Firecrawl as the deterministic data layer, LLM for interpretation. **Conditional careers-page scrape based on missing salary is on the v2 roadmap — not in v1.** |
 | **Output quality** | 3-tab data model (role master, seen ledger, filtered-out). HTML email with warm header, ranked per-band cards, honest "why not," filter-outs collapsed. Every matched role ships with a ready-to-send 1-page A4 tailored CV. |
 | **Solution fit** | Every must-have field covered. Nice-to-haves detected (4-day week explicit). Filter-out tracking with reasons (judging criterion). Ranked scoring. Documented freshness method (judging criterion). Zero-match weeks handled with grace. |
 | **Creativity** | Tailored CV per role (workflow produces the application, not the list). Freshness Ledger. Deal-breaker evidence quotes (no hallucinated rejections). Source-Yield Learning Loop. Emotionally-calibrated copy. All four genuinely unexpected in the job-scout space. |
@@ -84,7 +84,7 @@ Schedule Monday 08:00
 
 | Job Finder asset | Reused here |
 |---|---|
-| `evaluate-jobs/SKILL.md` rubric (40/20/20/20 weights) | `Score + Decide` Code node |
+| `evaluate-jobs/SKILL.md` weighted rubric (stack · remote · salary · perks — adapted from the original 40/20/20/20 to a stacked-bonus model that handles partial signal better) | `Score + Decide` Code node |
 | `research-company/SKILL.md` | Planned as Perplexity HTTP node in v2 (not in v1 to keep within 35k Firecrawl budget) |
 | `tailor-cv/SKILL.md` rules (targeted modifications, no fabrication, 1-page A4 HTML) | `CV Tailor (HTML)` LLM Chain |
 | Dedup on `listing_url` pattern | `Get Seen Roles` + `Dedup + Cap` |
@@ -103,19 +103,23 @@ Schedule Monday 08:00
 
 **2. Import**
 ```
-Import `daniel-workflow-final.json` → attach credentials → that is it.
-The 3 Data Tables auto-create by name on the first run (createIfNotExists:true).
-No manual table setup, no ID pasting.
+Import `daniel-workflow-final.json` → attach credentials.
 ```
 
-**3. Configure**
-- Open `Config + Run Context` Code node. Criteria is hard-coded; edit if personalising.
-- Enable `Write to Google Sheet` node + set your spreadsheet's document ID.
-- Enable `Send Weekly Digest` node + set recipient email. Tailored CVs are auto-attached as `.html` files — Daniel double-clicks to open in a browser, Cmd-P for PDF.
-- Set workflow `active` to enable the Monday 08:00 trigger, or run manually from the editor.
+**3. Create the three Data Tables on your instance** *(v1 limitation — see §8)*
+- `daniel_seen_roles`, `daniel_role_master`, `daniel_filtered_out` (schemas in §3 above).
+- Update the four Data Table node references to your IDs (or wait for v2's idempotent setup nodes).
 
-**4. First run**
-Use `n8n_test_workflow` or click "Test workflow" in the editor. Expected: ~8-15 min runtime, 10-15 candidates surfaced, 5-10 delivered with CVs attached.
+**4. Configure**
+- Open `Config + Run Context` Code node. Criteria is hard-coded; edit if personalising. **Note `candidate_cap`** — currently capped at 3 for fast iteration; raise for production volume.
+- Set your **recipient email** in `Send Weekly Digest` (currently the author's address).
+- Set your **Google Drive folder ID** in `Upload CV to Drive` (currently the author's folder).
+- Enable `Write to Google Sheet` node + set your spreadsheet's document ID.
+- Tailored CVs auto-attach as `.html` files — Daniel double-clicks to open in a browser, Cmd-P for PDF.
+- Set workflow `active` to enable the Monday 08:00 trigger, or run manually.
+
+**5. First run**
+Use `n8n_test_workflow` or click "Test workflow". With the default `candidate_cap: 3`: ~30-60 sec runtime, up to 3 candidates evaluated, 0-3 delivered with CVs.
 
 ---
 
@@ -151,7 +155,11 @@ Use `n8n_test_workflow` or click "Test workflow" in the editor. Expected: ~8-15 
 
 ## 8. Known v1 constraints (roadmap)
 
-- **Perplexity company research** planned but not in v1 to keep within credit budget. Would add overview / culture / news / hiring manager enrichment using the Job Finder `research-company` queries verbatim.
+- **Idempotent Data Table setup** — v1 references the author's table IDs; importers must create the three tables first. v2 adds three `Setup: Ensure <name>` nodes with `createIfNotExists: true` so import-and-go works on any instance.
+- **Hardcoded recipient email + Drive folder ID** — both currently embedded in their nodes. v2 reads them from `Config + Run Context` so there's a single config surface.
+- **No `retryOnFail`** on Firecrawl + OpenAI nodes — v2 will add `maxTries: 2, waitBetweenTries: 3000`.
+- **Conditional careers-page scrape** — agent currently runs against pre-fetched JD only. v2 adds the salary-triangulation branch.
+- **Perplexity company research** planned but not in v1 to keep within credit budget. Would add overview / culture / news / hiring manager enrichment using the Job Finder `research-company` queries.
 - **Interview Prep Packet** (top 2) planned for v2 after credit-budget validation on real runs.
 - **PDF conversion** — v1 delivers HTML (one `.html` attachment per delivered role on the weekly Gmail digest). Daniel opens in browser, Cmd-P → PDF → apply. PDFShift HTTP node planned for v2 to ship `.pdf` directly.
 - **Google Sheets + Gmail** nodes disabled in the imported JSON — user attaches credentials before enabling.

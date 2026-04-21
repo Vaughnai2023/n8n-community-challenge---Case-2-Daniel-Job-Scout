@@ -39,14 +39,27 @@ A weekly n8n workflow that doesn't just *find* roles for Daniel — a senior bac
 
 ```mermaid
 flowchart LR
+    A[📅 Schedule<br/>Mon 08:00] --> B[🔍 Firecrawl Search<br/>multi-site]
+    B --> C{{🔁 Per-role Loop}}
+    C --> D[🧠 Qualify + Score<br/>AI Agent]
+    D --> E[✍️ Tailor CV<br/>per match]
+    E --> F[📧 Weekly Digest]
+```
+
+Full export: [`build/daniel-workflow-final.json`](build/daniel-workflow-final.json) *(may be updated before final upload)*. The repo carries 11 colour-coded sticky notes that walk a judge through the canvas without leaving n8n.
+
+<details>
+<summary><b>Click for the full pipeline (15 nodes expanded)</b></summary>
+
+```mermaid
+flowchart LR
     A[Schedule<br/>Mon 08:00] --> B[Config + Run Context]
-    B --> C[Setup Data Tables<br/>idempotent zero-touch]
-    C --> D[Firecrawl Search<br/>multi-site, one call]
+    B --> D[Firecrawl Search<br/>multi-site, one call]
     D --> E[Parse + Dedup + Cap]
     E --> F{{SplitInBatches<br/>batch=1}}
-    F --> G[Role Qualifier<br/>AI Agent]
-    G -. tool .-> H[Firecrawl Scrape JD]
-    G --> I[Score + Decide<br/>40/20/20/20 rubric]
+    F --> H[Firecrawl Scrape JD]
+    H --> G[Role Qualifier<br/>AI Agent + Structured Output]
+    G --> I[Score + Decide]
     I -->|keeper| J[CV Tailor<br/>LLM Chain]
     J --> K[Save to Role Master]
     I -->|filter| L[Log Filtered-Out<br/>+ evidence quote]
@@ -59,7 +72,9 @@ flowchart LR
     O --> P
 ```
 
-**29 flow nodes + 11 sticky notes** that tell the story for judges. Full export: [`build/daniel-workflow-final.json`](build/daniel-workflow-final.json) *(may be updated before final upload)*.
+JD scrape is **deterministic** (regular Firecrawl Scrape node before the agent), not an agent tool — see [`build/submission.md` §7b](build/submission.md) for the engineering decision.
+
+</details>
 
 ---
 
@@ -85,9 +100,6 @@ This is the moment the workflow stops being clever and starts being useful.
 
 > **👉 [Open the sample tailored CV in your browser](build/daniel_sample_cv.html)** — see exactly what Daniel receives.
 
-![Sample tailored CV](assets/case-2/03-tailored-cv.png)
-<sub>*Screenshot placeholder — render of `build/daniel_sample_cv.html`*</sub>
-
 ### The tailoring rules (no fabrication, ever)
 
 > **Targeted modifications, not rewrites.**
@@ -95,7 +107,7 @@ This is the moment the workflow stops being clever and starts being useful.
 > Bullet points reordered and rewritten *to emphasize the role's stack*, but never invented.
 > 1-page A4, print-safe, designed for a senior-engineer aesthetic (left rail + main column, Inter + JetBrains Mono).
 
-These rules are ported verbatim from the production [Job Finder system's `tailor-cv/SKILL.md`](#what-this-reuses) — battle-tested, not speculative.
+These rules are ported from the production [Job Finder system's `tailor-cv/SKILL.md`](#what-this-reuses) — adapted, not invented for this challenge.
 
 ### What's in the box
 
@@ -107,17 +119,6 @@ These rules are ported verbatim from the production [Job Finder system's `tailor
 
 ---
 
-## How sources are chosen
-
-> 📌 **Coming soon.** The final job-source list and audit methodology are being locked in. This section will document:
-> - Which public job boards survived a Firecrawl reliability + EU-remote-yield audit
-> - The criteria used to score each candidate source
-> - How the source-yield loop rotates weak boards out automatically
->
-> *Check back shortly — or watch the demo walkthrough for the live story.*
-
----
-
 ## Per-role decision flow
 
 ```mermaid
@@ -125,7 +126,7 @@ flowchart TD
     A[Candidate role] --> B[Role Qualifier Agent<br/>OpenAI gpt-4o]
     B --> C[Firecrawl Scrape JD<br/>real markdown]
     C --> D[Structured Output Parser<br/>16 flat fields]
-    D --> E[Score + Decide<br/>stack 40 · remote 20 · salary 20 · 4DW 20]
+    D --> E[Score + Decide<br/>weighted on stack · remote · salary · perks]
     E --> F{Score ≥ threshold<br/>AND no deal-breakers?}
     F -->|YES| G[Tailor CV]
     F -->|NO| H[Log Filtered-Out<br/>+ verbatim JD quote]
@@ -171,7 +172,7 @@ erDiagram
     }
 ```
 
-All three tables auto-create by name on the first run (`createIfNotExists: true`). No manual setup.
+The three tables back the Freshness Ledger (Pillar 2) and the Filtered-Out evidence trail (Pillar 3).
 
 ---
 
@@ -181,25 +182,37 @@ All three tables auto-create by name on the first run (`createIfNotExists: true`
 - n8n Cloud or self-hosted with `N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true` set
 - Firecrawl account (free 35k credits — workflow uses ~2,600/run, fits 8+ runs comfortably)
 - OpenAI API key (gpt-4o)
-- Optional: Google Sheets + Gmail accounts for delivery
+- Optional: Google Sheets + Gmail + Google Drive accounts for delivery
 
 **1. Import the workflow**
 ```
-Import build/daniel-workflow-final.json → attach credentials → that is it.
-The 3 Data Tables auto-create by name on the first run.
-No manual table setup, no ID pasting.
+Import build/daniel-workflow-final.json → attach credentials.
 ```
 
-**2. Configure**
+**2. Create the three Data Tables on your instance**
+The current v1 export references the author's table IDs. On a fresh instance you'll need to:
+- Create three Data Tables: `daniel_seen_roles`, `daniel_role_master`, `daniel_filtered_out` (schemas listed in the [Data model](#data-model) section above), **or**
+- Update the Data Table node references to point at your own tables.
+
+> v2 will add idempotent setup nodes (`createIfNotExists`) so this step disappears on import — see the [Roadmap](#roadmap-v2).
+
+**3. Configure**
 - Open the `Config + Run Context` Code node — criteria are hard-coded; edit if personalising.
+- Set your **recipient email** in `Send Weekly Digest` (currently hardcoded to the author's address).
+- Set your **Google Drive folder ID** in `Upload CV to Drive` (currently the author's folder).
 - Enable `Write to Google Sheet` node + set your spreadsheet's document ID *(disabled in the imported JSON — attach creds first)*.
-- Enable `Send Weekly Digest` node + set recipient email. Tailored CVs auto-attach as `.html` files.
-- Set the workflow `active` to enable the Monday 08:00 trigger, or run manually.
+- Tailored CVs ride the digest as `.html` attachments and as Drive links.
 
-**3. First run**
-Click "Test workflow" in the editor. Expected: ~8-15 min runtime on a full week, 10-15 candidates surfaced, 5-10 delivered with CVs attached.
+**4. Activate**
+Set the workflow `active` to enable the Monday 08:00 trigger, or click "Test workflow" for a manual run.
 
-Full setup notes: [`build/submission.md` §6](build/submission.md).
+Full setup notes and the engineering decisions log: [`build/submission.md`](build/submission.md).
+
+---
+
+## How sources are chosen
+
+> 📌 **Coming soon.** The final job-source list and audit methodology are being locked in. The plan: a Firecrawl-reliability + EU-remote-yield audit on a candidate list of public boards, with weak boards rotated out via the source-yield loop (Pillar 4). The slot for the writeup is intentional — the architecture supports any source mix; only the chosen mix is in flight.
 
 ---
 
@@ -208,10 +221,10 @@ Full setup notes: [`build/submission.md` §6](build/submission.md).
 | Criterion | Evidence in the workflow |
 |---|---|
 | **Enrichment depth** | 6 layers: JD deep parse, stack matching with JD-substring evidence, salary triangulation (listing → careers → unavailable, with `salary_source` + `salary_confidence`), 4-day-week detection, `why_it_fits` + steelman `why_not`, tailored CV per role. |
-| **Smart orchestration** | Agent decides per-role: JD scrape always; careers-page scrape ONLY if salary missing. Source weighting informs candidate ordering. Dedup via Data Table. Loop with batch=1 + 90s timeout. Firecrawl as deterministic tool, LLM for interpretation. |
+| **Smart orchestration** | Deterministic JD scrape feeds the AI Agent, which extracts 16 structured fields via a `StructuredOutputParser`. Source weighting informs candidate ordering. Dedup via Data Table. Per-role loop. Firecrawl as the deterministic data layer, LLM for interpretation. (Conditional careers-page scrape is on the v2 roadmap.) |
 | **Output quality** | 3-tab data model (role master, seen ledger, filtered-out). HTML email with warm header, ranked per-band cards, honest "why not," filter-outs collapsed. Every matched role ships with a ready-to-send 1-page A4 tailored CV. |
 | **Solution fit** | Every must-have field covered. Nice-to-haves detected (4-day week explicit). Filter-out tracking with reasons. Ranked scoring. Documented freshness method. Zero-match weeks handled with grace. |
-| **Creativity** | Tailored CV per role (workflow produces the application, not the list). Freshness Ledger. Deal-breaker evidence quotes. Source-Yield Learning Loop. Emotionally-calibrated copy. All four genuinely unexpected in the job-scout space. |
+| **Creativity** | Tailored CV per role (workflow produces the application, not the list). Freshness Ledger. Deal-breaker evidence quotes. Source-Yield Learning Loop. Emotionally-calibrated copy. All four uncommon in this challenge category. |
 
 Full breakdown: [`build/submission.md` §4](build/submission.md).
 
@@ -219,11 +232,11 @@ Full breakdown: [`build/submission.md` §4](build/submission.md).
 
 ## What this reuses
 
-The design isn't speculative — it's ported directly from a production **Job Finder** system that's been running daily for months. The n8n workflow here is the Job Finder skills (`evaluate-jobs`, `research-company`, `tailor-cv`) rewrapped inside Firecrawl + n8n AI Agent + n8n Data Tables, adapted for Daniel's profile.
+The design isn't speculative — it adapts a personal **Job Finder** system the author has been running. The n8n workflow here is the Job Finder skills (`evaluate-jobs`, `research-company`, `tailor-cv`) rewrapped inside Firecrawl + n8n AI Agent + n8n Data Tables, adapted for Daniel's profile.
 
 | Job Finder asset | Reused here |
 |---|---|
-| `evaluate-jobs/SKILL.md` rubric (40/20/20/20 weights) | `Score + Decide` Code node |
+| `evaluate-jobs/SKILL.md` weighted rubric (stack · remote · salary · perks) | `Score + Decide` Code node |
 | `tailor-cv/SKILL.md` rules (targeted mods, no fabrication, 1-page A4) | `CV Tailor (HTML)` LLM Chain |
 | Dedup on `listing_url` pattern | `Get Seen Roles` + `Dedup + Cap` |
 | Status-feedback loop (applied/rejected) | Sheets `status` column read-back (next run) |
@@ -241,11 +254,11 @@ The design isn't speculative — it's ported directly from a production **Job Fi
 
 ---
 
-## Demos & walkthroughs
+## Walkthrough
 
-- 🎥 **Video walkthrough:** [`demos/case-2/`](demos/case-2/) *(coming soon)*
-- 📜 **Talking-points script:** [`demos/case-2/walkthrough.md`](demos/case-2/walkthrough.md)
-- 🖼️ **Screenshots:** [`assets/case-2/`](assets/case-2/) *(being captured)*
+- 📜 **Read the talking-points script:** [`demos/case-2/walkthrough.md`](demos/case-2/walkthrough.md) — 8 beats, designed for a 3-5 min video.
+- 🎥 **Video walkthrough:** linked from [`demos/case-2/`](demos/case-2/) once recorded.
+- 🖼️ **Screenshots:** dropping into [`assets/case-2/`](assets/case-2/) as captured.
 
 ---
 
@@ -257,7 +270,7 @@ The design isn't speculative — it's ported directly from a production **Job Fi
 ├── LICENSE                         ← MIT
 ├── build/                          ← the actual submission
 │   ├── submission.md               ← full write-up (rubric, decisions, credit budget)
-│   ├── daniel-workflow-final.json  ← exported workflow (40 nodes)
+│   ├── daniel-workflow-final.json  ← exported workflow (~30 flow nodes + sticky notes)
 │   ├── CV_TEMPLATE.html            ← 1-page A4 CV template
 │   ├── daniel_base_cv.md           ← Daniel's master CV (tailoring source)
 │   ├── daniel_sample_cv.html       ← live sample tailored CV
@@ -272,7 +285,7 @@ The design isn't speculative — it's ported directly from a production **Job Fi
 
 ## Credits
 
-**Built by [Vaughn Botha](https://github.com/)** for the n8n Community Build Event, April 2026.
+**Built by Vaughn Botha** for the n8n Community Build Event, April 2026.
 
 Powered by **n8n** • **Firecrawl** • **OpenAI gpt-4o**.
 

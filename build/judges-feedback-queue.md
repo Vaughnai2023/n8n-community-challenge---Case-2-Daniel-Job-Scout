@@ -1,6 +1,8 @@
-# Judges' Feedback — Workflow Changes Queued for Approval
+# Judges' Feedback — Status Log
 
-Three judges reviewed the initial commit. Doc/README fixes have been applied. Workflow-JSON changes are listed below for your decision before I touch the n8n flow.
+Three judges reviewed the initial commit. Doc fixes landed first; the four critical workflow fixes were approved by Vaughn and have now been applied to `daniel-workflow-final.json`.
+
+> **Status:** the four critical items (1-4 below) are ✅ DONE in the JSON. Items 5-10 remain optional polish; bold creative ideas remain on the table.
 
 | Judge | Score | Headline |
 |---|---|---|
@@ -10,26 +12,26 @@ Three judges reviewed the initial commit. Doc/README fixes have been applied. Wo
 
 ---
 
-## 🔴 Critical (would block community-template feature)
+## 🔴 Critical — ✅ ALL DONE
 
-### 1. Add idempotent Data Table setup nodes
+### ✅ 1. Add idempotent Data Table setup nodes
 - **Issue:** README + submission claimed "tables auto-create on first run via `createIfNotExists: true`." No such nodes exist in the JSON. Data Table nodes reference hardcoded IDs (`hYVM1BcLgvLXRRZH`, `STCIGAGYetQlDOiC`, `Xvfz1mJVl4egDPK4`). On import to any other instance: every Data Table node fails.
 - **Fix:** Add 3 × `dataTable` nodes in `create` mode with `createIfNotExists: true` between `Config + Run Context` and `Firecrawl Search`. Switch the four downstream Data Table nodes from `mode: "id"` to `mode: "name"` resourceLocators.
 - **Docs already updated** to call this a v1 limitation, but workflow fix is the better outcome.
 
-### 2. Move hardcoded values into Config
+### ✅ 2. Move hardcoded values into Config
 - **`Send Weekly Digest.sendTo`** = `"vaughnai2023@gmail.com"` — every importer's first run emails you.
 - **`Upload CV to Drive.folderId`** = `"10E8bhtgDR8xJwoycQwSqop1Gi0itxaOV"` — Drive 404 on import.
 - **Fix:** Add `recipient_email` and `drive_folder_id` to `Config + Run Context`, reference both via `{{ $('Config + Run Context').first().json.* }}`.
 
-### 3. Resolve the source-list contradiction
+### ✅ 3. Resolve the source-list contradiction (and make it user-editable)
 Three docs disagreed (Config node vs `source-audit.md` vs memory). You're handling the source story separately — but right now the Config node ships `remoteok / weworkremotely / himalayas / jobspresso / 4dayweek`, while `Parse Candidates` only normalizes `remoteok / weworkremotely / remotive / 4dayweek`. **Himalayas + jobspresso URLs will currently bucket as `source: 'unknown'` and sort to the bottom.** Either remove them from Config, or add normalizers in `Parse Candidates`.
 
 ---
 
 ## 🟡 Important (judges will ding for this)
 
-### 4. `Get Seen Roles` swallows errors silently
+### ✅ 4. `Get Seen Roles` swallows errors silently
 `onError: continueRegularOutput` + try/catch returning `[]` means a Data Table read failure → dedup becomes a no-op → Daniel gets the same role re-delivered weekly with new tailored CVs burning OpenAI credits. **Recommend:** keep `continueOnFail` for writes; fail loudly on the seen-roles read.
 
 ### 5. `Loop Over Candidates` has empty `options: {}`

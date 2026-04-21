@@ -40,9 +40,9 @@ Phase 0 audit selected 3 core + 1 bonus source (see `source-audit.md`). The work
 ```
 Schedule Monday 08:00
   → Config (criteria + sources + run_id)
+  → Setup: Ensure daniel_seen_roles / daniel_role_master / daniel_filtered_out
+      (3 dataTable.create nodes, createIfNotExists:true — idempotent zero-touch setup)
   → Firecrawl Search (multi-site, one call)
-  (Note: idempotent table-creation nodes are v2 — current v1 references the author's table IDs;
-   judges importing on a fresh instance create the 3 tables manually first. See §6.)
   → Parse Candidates (Code)
   → Get Seen Roles (Data Table, resolved by name)
   → Dedup + Cap (Code, sort by source weight)
@@ -103,22 +103,21 @@ Schedule Monday 08:00
 
 **2. Import**
 ```
-Import `daniel-workflow-final.json` → attach credentials.
+Import `daniel-workflow-final.json` → attach credentials → that is it.
+The 3 Data Tables auto-create by name on the first run (createIfNotExists:true).
+No manual table setup, no ID pasting.
 ```
 
-**3. Create the three Data Tables on your instance** *(v1 limitation — see §8)*
-- `daniel_seen_roles`, `daniel_role_master`, `daniel_filtered_out` (schemas in §3 above).
-- Update the four Data Table node references to your IDs (or wait for v2's idempotent setup nodes).
-
-**4. Configure**
-- Open `Config + Run Context` Code node. Criteria is hard-coded; edit if personalising. **Note `candidate_cap`** — currently capped at 3 for fast iteration; raise for production volume.
-- Set your **recipient email** in `Send Weekly Digest` (currently the author's address).
-- Set your **Google Drive folder ID** in `Upload CV to Drive` (currently the author's folder).
-- Enable `Write to Google Sheet` node + set your spreadsheet's document ID.
-- Tailored CVs auto-attach as `.html` files — Daniel double-clicks to open in a browser, Cmd-P for PDF.
+**3. Configure (one node, all the levers)**
+Open `Config + Run Context` and edit two blocks:
+- **`sources` array** — add or remove job boards freely. Each entry auto-wires into the Firecrawl search query AND the source normalizer.
+- **`delivery` object** — set `recipient_email` and `drive_folder_id`. Read by Gmail + Drive nodes.
+- **`candidate_cap`** — currently 3 for fast iteration; raise for production volume.
+- Optional: enable `Write to Google Sheet` node + set your spreadsheet's document ID.
+- Tailored CVs auto-attach as `.html` files AND upload to your Drive folder. Daniel double-clicks the attachment, Cmd-P for PDF.
 - Set workflow `active` to enable the Monday 08:00 trigger, or run manually.
 
-**5. First run**
+**4. First run**
 Use `n8n_test_workflow` or click "Test workflow". With the default `candidate_cap: 3`: ~30-60 sec runtime, up to 3 candidates evaluated, 0-3 delivered with CVs.
 
 ---
@@ -155,14 +154,20 @@ Use `n8n_test_workflow` or click "Test workflow". With the default `candidate_ca
 
 ## 8. Known v1 constraints (roadmap)
 
-- **Idempotent Data Table setup** — v1 references the author's table IDs; importers must create the three tables first. v2 adds three `Setup: Ensure <name>` nodes with `createIfNotExists: true` so import-and-go works on any instance.
-- **Hardcoded recipient email + Drive folder ID** — both currently embedded in their nodes. v2 reads them from `Config + Run Context` so there's a single config surface.
 - **No `retryOnFail`** on Firecrawl + OpenAI nodes — v2 will add `maxTries: 2, waitBetweenTries: 3000`.
-- **Conditional careers-page scrape** — agent currently runs against pre-fetched JD only. v2 adds the salary-triangulation branch.
+- **Conditional careers-page scrape** — agent currently runs against pre-fetched JD only. v2 adds the salary-triangulation branch (scrape the company careers page only when listing salary is missing).
 - **Perplexity company research** planned but not in v1 to keep within credit budget. Would add overview / culture / news / hiring manager enrichment using the Job Finder `research-company` queries.
 - **Interview Prep Packet** (top 2) planned for v2 after credit-budget validation on real runs.
 - **PDF conversion** — v1 delivers HTML (one `.html` attachment per delivered role on the weekly Gmail digest). Daniel opens in browser, Cmd-P → PDF → apply. PDFShift HTTP node planned for v2 to ship `.pdf` directly.
-- **Google Sheets + Gmail** nodes disabled in the imported JSON — user attaches credentials before enabling.
+- **Google Sheets node** disabled in the imported JSON — user attaches credentials before enabling.
+
+### Resolved post-judge-feedback (now in v1)
+
+- ✅ Idempotent Data Table setup — three `Setup: Ensure <name>` nodes with `createIfNotExists: true` create the tables on first run.
+- ✅ All Data Table references switched from instance IDs to `mode: "name"` — workflow is portable across n8n instances.
+- ✅ Recipient email and Drive folder ID moved into `Config + Run Context → delivery` for single-source-of-truth configuration.
+- ✅ Sources are a single source of truth in Config — adding/removing a board updates the search query AND the source normalizer automatically.
+- ✅ `Get Seen Roles` no longer swallows errors silently — read failures now stop the workflow rather than corrupting the dedup ledger.
 
 These are deliberate: v1 ships the four creative pillars cleanly on a tight credit budget. v2 layers on the enrichment once the core pipeline is proven in the wild.
 

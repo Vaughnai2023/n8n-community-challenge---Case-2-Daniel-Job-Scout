@@ -1,7 +1,4 @@
 {
-  "updatedAt": "2026-04-20T04:03:01.432Z",
-  "createdAt": "2026-04-19T14:51:31.440Z",
-  "id": "Lf0B8uZcpe4Xsgsb",
   "name": "M2 Case 2: Daniel — Job Scout v1",
   "description": null,
   "active": false,
@@ -29,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.accumulator = [];\nconst now = new Date();\nconst runId = `run_${now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;\nconst config = {\n  run_id: runId,\n  run_timestamp_utc: now.toISOString(),\n  dry_run: false,\n  criteria: {\n    role_keywords: ['senior backend engineer', 'staff backend engineer', 'backend engineer'],\n    stack_required: ['python', 'django'],\n    stack_preferred: ['postgresql', 'postgres', 'redis', 'aws'],\n    experience_years_target: 8,\n    salary_min_eur: 90000,\n    deal_breakers: ['on-site only', 'on site only', 'requires us citizenship', 'crypto', 'web3', 'blockchain'],\n    nice_to_have: ['4-day week', 'four-day week', 'open source', 'series a', 'series b', 'series c'],\n    max_listing_age_days: 7\n  },\n  sources: [\n    { name: 'remoteok.com', weight: 1.0 },\n    { name: 'weworkremotely.com', weight: 0.9 },\n    { name: 'himalayas.app', weight: 0.9 },\n    { name: 'jobspresso.co', weight: 0.8 },\n    { name: '4dayweek.io', weight: 0.6 }\n  ],\n  firecrawl: {\n    search_query: '\"senior backend engineer\" python django remote (site:remoteok.com OR site:weworkremotely.com OR site:himalayas.app OR site:jobspresso.co OR site:4dayweek.io) -crypto -web3',\n    search_limit: 24\n  },\n  candidate_cap: 3,\n  deliver_top_n: 10\n};\nreturn [{ json: config }];"
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.accumulator = [];\nconst now = new Date();\nconst runId = `run_${now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;\n\n// =============================================================\n// SOURCES — single source of truth. Add or remove freely.\n// Each entry automatically wires into:\n//   1) the Firecrawl site: operators in the search query (built below)\n//   2) source normalization in 'Parse Candidates'\n//   3) source-weight sort in 'Dedup + Cap Candidates'\n// Fields:\n//   name   — display name shown in tables and emails\n//   match  — URL substring used to recognize listings from this source\n//   weight — 0.0 to 1.0; higher = surfaces first when capacity is limited\n// =============================================================\nconst sources = [\n  { name: 'remoteok.com',       match: 'remoteok.com',       weight: 1.0 },\n  { name: 'weworkremotely.com', match: 'weworkremotely.com', weight: 0.9 },\n  { name: 'himalayas.app',      match: 'himalayas.app',      weight: 0.9 },\n  { name: 'jobspresso.co',      match: 'jobspresso.co',      weight: 0.8 },\n  { name: '4dayweek.io',        match: '4dayweek.io',        weight: 0.6 }\n];\nconst siteClauses = '(' + sources.map(s => 'site:' + s.match).join(' OR ') + ')';\n\nconst config = {\n  run_id: runId,\n  run_timestamp_utc: now.toISOString(),\n  dry_run: false,\n  criteria: {\n    role_keywords: ['senior backend engineer', 'staff backend engineer', 'backend engineer'],\n    stack_required: ['python', 'django'],\n    stack_preferred: ['postgresql', 'postgres', 'redis', 'aws'],\n    experience_years_target: 8,\n    salary_min_eur: 90000,\n    deal_breakers: ['on-site only', 'on site only', 'requires us citizenship', 'crypto', 'web3', 'blockchain'],\n    nice_to_have: ['4-day week', 'four-day week', 'open source', 'series a', 'series b', 'series c'],\n    max_listing_age_days: 7\n  },\n  sources,\n  firecrawl: {\n    search_query: `\\\"senior backend engineer\\\" python django remote ${siteClauses} -crypto -web3`,\n    search_limit: 24\n  },\n  // =============================================================\n  // DELIVERY — set these once. Read by Send Weekly Digest + Upload CV to Drive.\n  // =============================================================\n  delivery: {\n    recipient_email: 'your-email@example.com',\n    drive_folder_id: 'YOUR_GOOGLE_DRIVE_FOLDER_ID'\n  },\n  candidate_cap: 3,\n  deliver_top_n: 10\n};\nreturn [{ json: config }];"
       },
       "id": "config",
       "name": "Config + Run Context",
@@ -42,10 +39,239 @@
     },
     {
       "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "daniel_seen_roles",
+        "columns": {
+          "column": [
+            {
+              "name": "listing_url",
+              "type": "string"
+            },
+            {
+              "name": "company",
+              "type": "string"
+            },
+            {
+              "name": "role_title",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            },
+            {
+              "name": "first_seen_utc",
+              "type": "string"
+            },
+            {
+              "name": "last_seen_utc",
+              "type": "string"
+            },
+            {
+              "name": "listing_posted_date",
+              "type": "string"
+            },
+            {
+              "name": "age_source",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "setup-seen-roles",
+      "name": "Setup: Ensure daniel_seen_roles",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        464,
+        600
+      ],
+      "notes": "Idempotent: creates the table on first run, returns existing on subsequent runs."
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "daniel_role_master",
+        "columns": {
+          "column": [
+            {
+              "name": "listing_url",
+              "type": "string"
+            },
+            {
+              "name": "company",
+              "type": "string"
+            },
+            {
+              "name": "role",
+              "type": "string"
+            },
+            {
+              "name": "location",
+              "type": "string"
+            },
+            {
+              "name": "remote_type",
+              "type": "string"
+            },
+            {
+              "name": "posted_display",
+              "type": "string"
+            },
+            {
+              "name": "stack_matched_csv",
+              "type": "string"
+            },
+            {
+              "name": "stack_missing_csv",
+              "type": "string"
+            },
+            {
+              "name": "salary_min_eur",
+              "type": "number"
+            },
+            {
+              "name": "salary_max_eur",
+              "type": "number"
+            },
+            {
+              "name": "salary_source",
+              "type": "string"
+            },
+            {
+              "name": "salary_confidence",
+              "type": "string"
+            },
+            {
+              "name": "four_day_week",
+              "type": "boolean"
+            },
+            {
+              "name": "fit_score",
+              "type": "number"
+            },
+            {
+              "name": "fit_band",
+              "type": "string"
+            },
+            {
+              "name": "why_it_fits",
+              "type": "string"
+            },
+            {
+              "name": "why_not",
+              "type": "string"
+            },
+            {
+              "name": "observed_facts",
+              "type": "string"
+            },
+            {
+              "name": "company_research",
+              "type": "string"
+            },
+            {
+              "name": "tailored_cv_html",
+              "type": "string"
+            },
+            {
+              "name": "tailored_cv_url",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "discovered_date",
+              "type": "string"
+            },
+            {
+              "name": "status",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "setup-role-master",
+      "name": "Setup: Ensure daniel_role_master",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        600
+      ],
+      "notes": "Idempotent: creates the table on first run, returns existing on subsequent runs."
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "daniel_filtered_out",
+        "columns": {
+          "column": [
+            {
+              "name": "listing_url",
+              "type": "string"
+            },
+            {
+              "name": "company",
+              "type": "string"
+            },
+            {
+              "name": "role",
+              "type": "string"
+            },
+            {
+              "name": "reason_code",
+              "type": "string"
+            },
+            {
+              "name": "reason_quote",
+              "type": "string"
+            },
+            {
+              "name": "run_id",
+              "type": "string"
+            },
+            {
+              "name": "filtered_at_utc",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "setup-filtered-out",
+      "name": "Setup: Ensure daniel_filtered_out",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        784,
+        600
+      ],
+      "notes": "Idempotent: creates the table on first run, returns existing on subsequent runs."
+    },
+    {
+      "parameters": {
         "resource": "MapSearch",
         "operation": "search",
-        "query": "={{ $json.firecrawl.search_query }}",
-        "limit": "={{ $json.firecrawl.search_limit }}",
+        "query": "={{ $('Config + Run Context').first().json.firecrawl.search_query }}",
+        "limit": "={{ $('Config + Run Context').first().json.firecrawl.search_limit }}",
         "requestOptions": {}
       },
       "id": "firecrawl-search",
@@ -66,7 +292,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.all();\nconst seen = new Set();\nconst candidates = [];\nfor (const item of raw) {\n  const j = item.json || {};\n  let resultArr = [];\n  if (j.data && Array.isArray(j.data.web)) resultArr = j.data.web;\n  else if (j.data && Array.isArray(j.data)) resultArr = j.data;\n  else if (Array.isArray(j.web)) resultArr = j.web;\n  else if (Array.isArray(j.results)) resultArr = j.results;\n  else if (Array.isArray(j)) resultArr = j;\n  for (const r of resultArr) {\n    const url = r.url || r.link || r.source_url;\n    if (!url || seen.has(url)) continue;\n    seen.add(url);\n    let source = 'unknown';\n    if (url.includes('remoteok.com')) source = 'remoteok.com';\n    else if (url.includes('weworkremotely.com')) source = 'weworkremotely.com';\n    else if (url.includes('remotive.com')) source = 'remotive.com';\n    else if (url.includes('4dayweek.io')) source = '4dayweek.io';\n    candidates.push({\n      listing_url: url,\n      title: r.title || r.name || '',\n      description_snippet: r.description || r.snippet || (r.markdown || '').slice(0, 400),\n      source\n    });\n  }\n}\nconst config = $('Config + Run Context').first().json;\nreturn candidates.map(c => ({ json: { ...c, run_id: config.run_id, run_timestamp_utc: config.run_timestamp_utc } }));"
+        "jsCode": "const raw = $input.all();\nconst config = $('Config + Run Context').first().json;\nconst sources = config.sources || [];\nconst seen = new Set();\nconst candidates = [];\nfor (const item of raw) {\n  const j = item.json || {};\n  let resultArr = [];\n  if (j.data && Array.isArray(j.data.web)) resultArr = j.data.web;\n  else if (j.data && Array.isArray(j.data)) resultArr = j.data;\n  else if (Array.isArray(j.web)) resultArr = j.web;\n  else if (Array.isArray(j.results)) resultArr = j.results;\n  else if (Array.isArray(j)) resultArr = j;\n  for (const r of resultArr) {\n    const url = r.url || r.link || r.source_url;\n    if (!url || seen.has(url)) continue;\n    seen.add(url);\n    // Source normalization driven by Config.sources — single source of truth.\n    let source = 'unknown';\n    const urlLower = url.toLowerCase();\n    for (const s of sources) {\n      if (s.match && urlLower.includes(s.match.toLowerCase())) { source = s.name; break; }\n    }\n    candidates.push({\n      listing_url: url,\n      title: r.title || r.name || '',\n      description_snippet: r.description || r.snippet || (r.markdown || '').slice(0, 400),\n      source\n    });\n  }\n}\nreturn candidates.map(c => ({ json: { ...c, run_id: config.run_id, run_timestamp_utc: config.run_timestamp_utc } }));"
       },
       "id": "parse-candidates",
       "name": "Parse Candidates",
@@ -82,8 +308,8 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "hYVM1BcLgvLXRRZH",
-          "mode": "id"
+          "value": "daniel_seen_roles",
+          "mode": "name"
         },
         "filters": {
           "conditions": []
@@ -97,9 +323,7 @@
       "position": [
         1120,
         400
-      ],
-      "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      ]
     },
     {
       "parameters": {
@@ -278,8 +502,8 @@
       "parameters": {
         "dataTableId": {
           "__rl": true,
-          "value": "STCIGAGYetQlDOiC",
-          "mode": "id"
+          "value": "daniel_role_master",
+          "mode": "name"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -547,8 +771,8 @@
       "parameters": {
         "dataTableId": {
           "__rl": true,
-          "value": "Xvfz1mJVl4egDPK4",
-          "mode": "id"
+          "value": "daniel_filtered_out",
+          "mode": "name"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -646,8 +870,8 @@
       "parameters": {
         "dataTableId": {
           "__rl": true,
-          "value": "hYVM1BcLgvLXRRZH",
-          "mode": "id"
+          "value": "daniel_seen_roles",
+          "mode": "name"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -816,7 +1040,7 @@
     },
     {
       "parameters": {
-        "sendTo": "vaughnai2023@gmail.com",
+        "sendTo": "={{ $('Config + Run Context').first().json.delivery.recipient_email }}",
         "subject": "={{ $json.email_subject }}",
         "message": "={{ $json.email_html }}",
         "options": {},
@@ -835,7 +1059,7 @@
       "webhookId": "170dc0dd-cfe6-4614-a83d-622c38f7f79f",
       "disabled": false,
       "continueOnFail": true,
-      "notes": "Sends one weekly digest to vaughnai2023@gmail.com with Apply + View CV buttons per role. Requires Gmail OAuth2 credential."
+      "notes": "Sends one weekly digest with Apply + View CV buttons per role. Recipient is read from Config + Run Context → delivery.recipient_email. Requires Gmail OAuth2 credential."
     },
     {
       "parameters": {
@@ -1101,7 +1325,7 @@
         "folderId": {
           "__rl": true,
           "mode": "id",
-          "value": "10E8bhtgDR8xJwoycQwSqop1Gi0itxaOV"
+          "value": "={{ $('Config + Run Context').first().json.delivery.drive_folder_id }}"
         },
         "options": {}
       },
@@ -1135,6 +1359,39 @@
       ]
     },
     "Config + Run Context": {
+      "main": [
+        [
+          {
+            "node": "Setup: Ensure daniel_seen_roles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup: Ensure daniel_seen_roles": {
+      "main": [
+        [
+          {
+            "node": "Setup: Ensure daniel_role_master",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup: Ensure daniel_role_master": {
+      "main": [
+        [
+          {
+            "node": "Setup: Ensure daniel_filtered_out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup: Ensure daniel_filtered_out": {
       "main": [
         [
           {
@@ -1435,219 +1692,7 @@
   "staticData": {
     "node:Weekly Monday 08:00": {
       "recurrenceRules": []
-    },
-    "node:Config + Run Context": {
-      "accumulator": []
-    },
-    "node:Score + Decide": {
-      "accumulator": [
-        {
-          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4261485",
-          "source": "remotive.com",
-          "company": "Avive",
-          "role": "Senior Backend Engineer",
-          "location": "USA, Canada",
-          "remote_type": "remote_specific_region",
-          "posted_display": "2wks ago",
-          "listing_posted_date": "2wks ago",
-          "age_source": "recency_label",
-          "stack_matched_csv": "Python,Django,PostgreSQL,Redis,AWS",
-          "stack_missing_csv": "Elasticsearch,Celery,Docker,CI/CD",
-          "salary_min_eur": 141000,
-          "salary_max_eur": 179000,
-          "salary_source": "JD",
-          "salary_confidence": "high",
-          "observed_facts": "Salary: $150,000 - $190,000 a year; Location: USA, Canada; Remote: specific region;",
-          "why_it_fits": "The role matches the candidate's expertise in Python, Django, PostgreSQL, and Redis, but the location restriction is a deal-breaker.",
-          "why_not": "Missing: elasticsearch, celery, docker. Remote scoped to a region — check timezone.",
-          "four_day_week": false,
-          "fit_score": 90,
-          "fit_band": "High",
-          "filtered": true,
-          "reason_code": "deal_breaker:Location restriction to USA, Canada",
-          "reason_quote": "Be aware of the location restriction for this remote position: USA, Canada",
-          "run_id": "run_20260419180545",
-          "discovered_date": "2026-04-19T18:05:45.645Z",
-          "status": "new"
-        },
-        {
-          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4284152",
-          "source": "remotive.com",
-          "company": "Procurify",
-          "role": "Senior Backend Engineer",
-          "location": "Canada",
-          "remote_type": "remote_specific_region",
-          "posted_display": "1wk ago",
-          "listing_posted_date": "1wk ago",
-          "age_source": "recency_label",
-          "stack_matched_csv": "Python,Django,FastAPI,AWS",
-          "stack_missing_csv": "PostgreSQL,Redis",
-          "salary_min_eur": 83000,
-          "salary_max_eur": 102000,
-          "salary_source": "JD",
-          "salary_confidence": "high",
-          "observed_facts": "Remote-first organization; Flexible working hours; Competitive health benefits; Stock options; DEI initiatives",
-          "why_it_fits": "The role is remote with a strong Python and AWS focus, matching Daniel's skills and preferences.",
-          "why_not": "Missing: postgresql, redis. Remote scoped to a region — check timezone.",
-          "four_day_week": false,
-          "fit_score": 64,
-          "fit_band": "Medium",
-          "filtered": false,
-          "reason_code": "",
-          "reason_quote": "",
-          "run_id": "run_20260419180545",
-          "discovered_date": "2026-04-19T18:05:45.645Z",
-          "status": "new"
-        },
-        {
-          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4268048",
-          "source": "remotive.com",
-          "company": "Level AI",
-          "role": "Senior Backend Engineer",
-          "location": "EST (UTC-5)",
-          "remote_type": "remote_specific_region",
-          "posted_display": "1mth ago",
-          "listing_posted_date": "1mth ago",
-          "age_source": "recency_label",
-          "stack_matched_csv": "Python,Django,PostgreSQL,Redis",
-          "stack_missing_csv": "AWS",
-          "salary_min_eur": 0,
-          "salary_max_eur": 0,
-          "salary_source": "unavailable",
-          "salary_confidence": "none",
-          "observed_facts": "Role requires work in Eastern Time Zone; Experience in Django highly desirable; Market-leading compensation based on skills; Series C startup headquartered in Mountain View, California",
-          "why_it_fits": "The role matches Daniel's expertise in Python and Django, and includes PostgreSQL and Redis, but the location restriction to EST (UTC-5) is a deal-breaker.",
-          "why_not": "Missing: aws. Salary none — verify. Remote scoped to a region — check timezone.",
-          "four_day_week": false,
-          "fit_score": 78,
-          "fit_band": "High",
-          "filtered": true,
-          "reason_code": "deal_breaker:Location restriction to EST (UTC-5)",
-          "reason_quote": "Be aware of the location restriction for this remote position: EST (UTC-5)",
-          "run_id": "run_20260419180545",
-          "discovered_date": "2026-04-19T18:05:45.645Z",
-          "status": "new"
-        }
-      ]
-    },
-    "node:Aggregate Results": {},
-    "global": {
-      "accumulator": [
-        {
-          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4261485",
-          "source": "remotive.com",
-          "company": "Avive",
-          "role": "Senior Backend Engineer",
-          "location": "USA, Canada",
-          "remote_type": "remote_specific_region",
-          "posted_display": "2wks ago",
-          "listing_posted_date": "2wks ago",
-          "age_source": "recency_label",
-          "stack_matched_csv": "Python,Django,PostgreSQL,Redis,AWS",
-          "stack_missing_csv": "Elasticsearch,Docker,Celery,pytest",
-          "salary_min_eur": 141000,
-          "salary_max_eur": 179000,
-          "salary_source": "JD",
-          "salary_confidence": "high",
-          "observed_facts": "Remote location restricted to USA, Canada; Salary in USD; Python and Django required; PostgreSQL and Redis experience needed",
-          "why_it_fits": "The role requires Python and Django expertise, matching Daniel's skills, but the location restriction to USA, Canada is a deal-breaker.",
-          "why_not": "Missing: elasticsearch, docker, celery. Remote scoped to a region — check timezone.",
-          "four_day_week": false,
-          "fit_score": 90,
-          "fit_band": "High",
-          "filtered": true,
-          "reason_code": "deal_breaker:Location restriction to USA, Canada",
-          "reason_quote": "Be aware of the location restriction for this remote position: USA, Canada",
-          "run_id": "run_20260419180753",
-          "discovered_date": "2026-04-19T18:07:53.737Z",
-          "status": "new"
-        },
-        {
-          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-4268048",
-          "source": "remotive.com",
-          "company": "Level AI",
-          "role": "Senior Backend Engineer",
-          "location": "EST (UTC-5)",
-          "remote_type": "remote_specific_region",
-          "posted_display": "1mth ago",
-          "listing_posted_date": "1mth ago",
-          "age_source": "recency_label",
-          "stack_matched_csv": "Python,Django,PostgreSQL,Redis",
-          "stack_missing_csv": "AWS",
-          "salary_min_eur": 0,
-          "salary_max_eur": 0,
-          "salary_source": "unavailable",
-          "salary_confidence": "none",
-          "observed_facts": "Role requires work in Eastern Time Zone; Experience in Django is highly desirable; Competencies include Python, Django, PostgreSQL, Redis, Celery, CI/CD, GCP, Kubernetes and Docker; Market-leading compensation offered based on skills and aptitude.",
-          "why_it_fits": "The role matches Daniel's skills in Python, Django, PostgreSQL, and Redis, but the location restriction to EST is a deal-breaker for EU-friendly remote work.",
-          "why_not": "Missing: aws. Salary none — verify. Remote scoped to a region — check timezone.",
-          "four_day_week": false,
-          "fit_score": 75,
-          "fit_band": "High",
-          "filtered": true,
-          "reason_code": "deal_breaker:Location restriction to EST (UTC-5) is not EU-friendly",
-          "reason_quote": "Be aware of the location restriction for this remote position: EST (UTC-5)",
-          "run_id": "run_20260419180753",
-          "discovered_date": "2026-04-19T18:07:53.737Z",
-          "status": "new"
-        },
-        {
-          "listing_url": "https://remotive.com/remote/jobs/software-development/senior-backend-engineer-3575253",
-          "source": "remotive.com",
-          "company": "BeetsBytes",
-          "role": "Senior Backend Engineer",
-          "location": "Ukraine",
-          "remote_type": "remote_specific_region",
-          "posted_display": "2mths ago",
-          "listing_posted_date": "2mths ago",
-          "age_source": "recency_label",
-          "stack_matched_csv": "Python,Django,PostgreSQL,Redis,AWS",
-          "stack_missing_csv": "",
-          "salary_min_eur": 0,
-          "salary_max_eur": 0,
-          "salary_source": "unavailable",
-          "salary_confidence": "none",
-          "observed_facts": "Location: Ukraine; Remote; Full-time; 2mths ago; Python; Django; PostgreSQL; Redis; AWS; Microservices architecture; Distributed systems; Open source contributions; Startup experience",
-          "why_it_fits": "The role matches Daniel's skills in Python, Django, PostgreSQL, Redis, and AWS. It is a remote position with EU-friendly location.",
-          "why_not": "Salary none — verify. Remote scoped to a region — check timezone.",
-          "four_day_week": false,
-          "fit_score": 78,
-          "fit_band": "High",
-          "filtered": false,
-          "reason_code": "",
-          "reason_quote": "",
-          "run_id": "run_20260419180753",
-          "discovered_date": "2026-04-19T18:07:53.737Z",
-          "status": "new"
-        }
-      ]
     }
   },
-  "meta": null,
-  "pinData": {},
-  "versionId": "7303e4b2-0957-4c43-91e2-6726ec245386",
-  "activeVersionId": null,
-  "versionCounter": 76,
-  "triggerCount": 2,
-  "shared": [
-    {
-      "updatedAt": "2026-04-19T14:51:31.445Z",
-      "createdAt": "2026-04-19T14:51:31.445Z",
-      "role": "workflow:owner",
-      "workflowId": "Lf0B8uZcpe4Xsgsb",
-      "projectId": "BqS8WwXuiZk1o1OV",
-      "project": {
-        "updatedAt": "2025-05-27T10:20:20.262Z",
-        "createdAt": "2025-05-27T09:53:45.116Z",
-        "id": "BqS8WwXuiZk1o1OV",
-        "name": "Vaughn Botha <vaughn959@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "creatorId": "15a5b02e-4ca8-42da-afd6-b9981160e1a4"
-      }
-    }
-  ],
-  "tags": [],
-  "activeVersion": null
+  "pinData": {}
 }

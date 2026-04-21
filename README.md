@@ -172,7 +172,7 @@ erDiagram
     }
 ```
 
-The three tables back the Freshness Ledger (Pillar 2) and the Filtered-Out evidence trail (Pillar 3).
+The three tables back the Freshness Ledger (Pillar 2) and the Filtered-Out evidence trail (Pillar 3). They auto-create on first run via three idempotent `Setup: Ensure …` nodes — judges importing the workflow do nothing manual.
 
 ---
 
@@ -188,22 +188,30 @@ The three tables back the Freshness Ledger (Pillar 2) and the Filtered-Out evide
 ```
 Import build/daniel-workflow-final.json → attach credentials.
 ```
+The three Data Tables (`daniel_seen_roles`, `daniel_role_master`, `daniel_filtered_out`) **auto-create on first run** via three `Setup: Ensure …` nodes (`createIfNotExists: true`) — no manual table setup, no ID pasting.
 
-**2. Create the three Data Tables on your instance**
-The current v1 export references the author's table IDs. On a fresh instance you'll need to:
-- Create three Data Tables: `daniel_seen_roles`, `daniel_role_master`, `daniel_filtered_out` (schemas listed in the [Data model](#data-model) section above), **or**
-- Update the Data Table node references to point at your own tables.
+**2. Configure (one node, all the levers)**
+Open `Config + Run Context` and edit two blocks:
 
-> v2 will add idempotent setup nodes (`createIfNotExists`) so this step disappears on import — see the [Roadmap](#roadmap-v2).
+```js
+// SOURCES — add or remove freely. Wires automatically into the
+// Firecrawl search query AND the source normalizer in Parse Candidates.
+const sources = [
+  { name: 'remoteok.com',       match: 'remoteok.com',       weight: 1.0 },
+  { name: 'weworkremotely.com', match: 'weworkremotely.com', weight: 0.9 },
+  // … add your own here
+];
 
-**3. Configure**
-- Open the `Config + Run Context` Code node — criteria are hard-coded; edit if personalising.
-- Set your **recipient email** in `Send Weekly Digest` (currently hardcoded to the author's address).
-- Set your **Google Drive folder ID** in `Upload CV to Drive` (currently the author's folder).
-- Enable `Write to Google Sheet` node + set your spreadsheet's document ID *(disabled in the imported JSON — attach creds first)*.
-- Tailored CVs ride the digest as `.html` attachments and as Drive links.
+// DELIVERY — read by Send Weekly Digest + Upload CV to Drive.
+delivery: {
+  recipient_email: 'your-email@example.com',
+  drive_folder_id: 'YOUR_GOOGLE_DRIVE_FOLDER_ID'
+}
+```
 
-**4. Activate**
+Optional: enable `Write to Google Sheet` node + set your spreadsheet's document ID (disabled in the imported JSON — attach creds first).
+
+**3. Activate**
 Set the workflow `active` to enable the Monday 08:00 trigger, or click "Test workflow" for a manual run.
 
 Full setup notes and the engineering decisions log: [`build/submission.md`](build/submission.md).

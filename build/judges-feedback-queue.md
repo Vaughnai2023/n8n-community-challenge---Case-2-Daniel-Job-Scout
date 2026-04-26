@@ -20,8 +20,8 @@ Three judges reviewed the initial commit. Doc fixes landed first; the four criti
 - **Docs already updated** to call this a v1 limitation, but workflow fix is the better outcome.
 
 ### ✅ 2. Move hardcoded values into Config
-- **`Send Weekly Digest.sendTo`** = `"vaughnai2023@gmail.com"` — every importer's first run emails you.
-- **`Upload CV to Drive.folderId`** = `"10E8bhtgDR8xJwoycQwSqop1Gi0itxaOV"` — Drive 404 on import.
+- **`Send Weekly Digest.sendTo`** = `"<personal-email-redacted>"` — every importer's first run emails you.
+- **`Upload CV to Drive.folderId`** = `"<drive-folder-id-redacted>"` — Drive 404 on import.
 - **Fix:** Add `recipient_email` and `drive_folder_id` to `Config + Run Context`, reference both via `{{ $('Config + Run Context').first().json.* }}`.
 
 ### ✅ 3. Resolve the source-list contradiction (and make it user-editable)

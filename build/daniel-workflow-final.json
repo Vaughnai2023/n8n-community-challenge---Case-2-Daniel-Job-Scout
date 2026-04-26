@@ -284,8 +284,8 @@
       ],
       "credentials": {
         "firecrawlApi": {
-          "id": "TIuPUXx9FYiWbwS1",
-          "name": "Firecrawl account"
+          "id": "",
+          "name": ""
         }
       },
       "onError": "continueRegularOutput"
@@ -373,8 +373,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "id": "O22yFogXaDdyXSyr",
-          "name": "OPENAI_API_KEY"
+          "id": "",
+          "name": ""
         }
       }
     },
@@ -478,8 +478,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "id": "O22yFogXaDdyXSyr",
-          "name": "OPENAI_API_KEY"
+          "id": "",
+          "name": ""
         }
       }
     },
@@ -1269,8 +1269,8 @@
       ],
       "credentials": {
         "firecrawlApi": {
-          "id": "TIuPUXx9FYiWbwS1",
-          "name": "Firecrawl account"
+          "id": "",
+          "name": ""
         }
       },
       "onError": "continueRegularOutput"

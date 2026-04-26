@@ -32,6 +32,9 @@ build/ids.md
 *secret*
 serviceAccountKey.json
 firebase-adminsdk*.json
+# screenshots are public assets, not credentials — re-allow them
+!assets/**/*credential*.png
+!assets/**/*secret*.png
 
 # === Logs / temp ===
 *.log

@@ -15,7 +15,7 @@ A weekly n8n workflow that doesn't just *find* roles for Daniel — a senior bac
 
 ## 🔗 See the showstopper before reading anything else
 
-> ### **[→ Open the live tailored-CV gallery](https://YOUR-VERCEL-URL.vercel.app)**
+> ### **[→ Open the live tailored-CV gallery](https://n8n-community-challenge-case-2-dani.vercel.app)**
 >
 > 5 real CVs from a verified n8n run, side-by-side with Daniel's master CV. Every modification documented, every chip and bullet traceable to a value in the workflow's `daniel_role_master` data table. **No fabrication, no hallucination, no synthetic data.**
 
@@ -317,7 +317,7 @@ For each of the four creative pillars, here's exactly where to look to confirm t
 
 | Claim | Where to verify it |
 |---|---|
-| 🎯 **Tailored CV per role isn't a mockup — every chip and bullet maps to the master CV.** | [Open the live gallery](https://YOUR-VERCEL-URL.vercel.app) → click any of the 5 cards → side-by-side master vs tailored, with the 5 numbered callouts spelling out exactly what changed and why. |
+| 🎯 **Tailored CV per role isn't a mockup — every chip and bullet maps to the master CV.** | [Open the live gallery](https://n8n-community-challenge-case-2-dani.vercel.app) → click any of the 5 cards → side-by-side master vs tailored, with the 5 numbered callouts spelling out exactly what changed and why. |
 | 🔍 **Deal-breaker evidence quotes are verbatim, never invented.** | ![Filtered evidence](assets/case-2/screenshots/08-filtered-evidence-quote.png) — `daniel_filtered_out` table row showing `reason_quote` as a verbatim JD substring. The agent is instructed: this MUST be a substring. |
 | 📅 **Freshness Ledger is the authoritative recency signal when the source has no posting date.** | ![Data tables after run](assets/case-2/screenshots/04-data-tables-after-run.png) — the `daniel_seen_roles` table stamps every URL with `first_seen_utc` on discovery. Each delivered role declares its `age_source` (`listing_date` / `recency_label` / `first_seen`). |
 | 🔁 **Frequency-tiered source rotation is real, not aspirational.** | Open the [`Config + Run Context`](Case%202_%20Daniel%20%E2%80%94%20Job%20Scout%20Hunter%20/daniel-workflow-template.json) Code node. Read the `allSources` array — `frequency_days: 30` for HN, `7` for WWR/RemoteOK/EU Remote Jobs. The Code node tracks `source_last_scraped` in workflow staticData and only includes due sources in each Firecrawl `site:` query. |

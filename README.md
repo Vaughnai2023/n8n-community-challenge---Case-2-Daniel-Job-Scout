@@ -270,7 +270,7 @@ delivery: {
 ```
 
 **3. Activate**
-Set the workflow `active` to enable the Monday 08:00 trigger, or hit `Test workflow` (or POST to the `daniel-test` webhook) for a manual run.
+Set the workflow `active` to enable the Monday 08:00 trigger, or hit `Test workflow` for a manual run.
 
 ![Successful execution](assets/case-2/screenshots/05-execution-success.png)
 *Run `114545` — 30 candidates parsed, 5 delivered with tailored CVs, 3 filtered with verbatim quotes, in 2m 46s.*

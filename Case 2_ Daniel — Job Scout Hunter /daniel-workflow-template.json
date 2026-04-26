@@ -1008,21 +1008,6 @@
     },
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "daniel-test",
-        "options": {}
-      },
-      "id": "b215122e-11d1-4083-a991-e41201d7c527",
-      "name": "Test Webhook Trigger",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        240,
-        560
-      ]
-    },
-    {
-      "parameters": {
         "operation": "scrape",
         "url": "={{ $json.listing_url }}",
         "requestOptions": {}
@@ -1508,17 +1493,6 @@
         [
           {
             "node": "Send Weekly Digest",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Test Webhook Trigger": {
-      "main": [
-        [
-          {
-            "node": "Config + Run Context",
             "type": "main",
             "index": 0
           }
